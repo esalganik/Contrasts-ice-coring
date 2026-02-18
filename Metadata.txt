@@ -1,0 +1,18 @@
+Dataset was collected during Contrasts expedition in July-August 2025
+
+Authors and their contributions:
+	Name			Contribution			Number of cores
+1	Dmitry Divine		Core collection, lab work	52	
+2	David Clemens-Sewall	Core collection			45	
+3	Emiliano Cimoli		Core collection			44	
+4	Lena Eggers		Core collection			43	
+5	Keigo Takahashi		Core collection			11	
+6	Evgenii Salganik	Data processing			0	
+7	Marcel Nicolaus		Cruise leader			0	
+
+Abstract:
+
+Sea-ice thickness, draft, salinity, temperature, and ice density were measured during near-weekly surveys at the coring site during the CONTRASTS expedition 4 times at 3 different stations. The ice cores were extracted either with a 9-cm (Mark II) or 7.25-cm (Mark III) internal diameter ice corers (Kovacs Enterprise, US). This data set includes data from 12 coring site visits that were performed from 10 July 2025 to 26 August 2025. During each coring event, ice temperature was measured in situ from a separate temperature core, using Testo 720 thermometers in drill holes with a length of half-core-diameter at 5-cm vertical resolution. Ice bulk practical salinity samples were subsampled from the same melted core segment (5-cm resolution). Ice bulk practical salinity was measured using a YSI 30 conductivity meter. Ice density was measured using the hydrostatic weighing method in air and kerosene (Pustogvar and Kulyakhtin, 2016) from a density core in the freezer laboratory onboard Polarstern at the temperature of –(17-24)°C. Relative volumes of brine and gas were estimated from ice salinity, temperature, and density using Cox and Weeks (1983) for cold ice and Leppäranta and Manninen (1988) for ice warmer than –2°C.
+
+The data contains the event label (1), date/time (2), global coordinates (3,4), station number (8), ice age (9) and presence of melt pond above the core (10) of each coring activity. Each density core has its manually measured ice thickness (5), ice draft (6), core length (7). Each core section has the total length of its top (11) and bottom (12) measured in situ. Each core section has the value of its practical salinity (13), air temperature in laboratry (14), in situ temperature (15), ice density at the laboratory (16) and in situ (17) temperatures, brine volume fraction (18), gas volume fraction at laboratory (19) and in situ temperature (20). Temperature values were interpolated to the depth of density measurements. The global coordinates of coring sites were measured directly. Brine volume (18) fraction estimates is presented only for brine volume fraction values from 0 to 40%. Ice temperatures were assumed to be not higher than -0.1°C. Each core section also has comments (21) describing the sample special characteristics.
+
