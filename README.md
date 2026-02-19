@@ -6,4 +6,9 @@ Sea-ice thickness, draft, salinity, temperature, and ice density were measured d
 
 The data contain the event label (1), date/time (2), global coordinates (3, 4), station number (8), ice age (9), and presence of a melt pond above the core (10) for each coring activity. Each density core has its manually measured ice thickness (5), ice draft (6), and core length (7). Each core section has the total length of its top (11) and bottom (12) measured in situ. Each core section has the value of its practical salinity (13), air temperature in the laboratory (14), in situ temperature (15), ice density at the laboratory (16) and in situ (17) temperatures, brine volume fraction (18), gas volume fraction at the laboratory (19) and in situ temperature (20). Temperature values were interpolated to the depth of the density measurements. The global coordinates of coring sites were measured directly. Brine volume (18) fraction estimates are presented only for brine volume fraction values from 0 to 40%. Ice temperatures were assumed to be not higher than -0.1°C. Each core section also has comments (21) describing the sample's special characteristics.
 
-<img src="https://github.com/esalganik/Contrasts-ice-coring/blob/main/Density_salinity_temperature_vs_time.png" width="500">
+<figure>
+  <img src="https://github.com/esalganik/Contrasts-ice-coring/blob/main/Density_salinity_temperature_vs_time.png" width="600">
+  <figcaption>
+    <b>Figure 1.</b> Sea ice salinity, density, and temperature temporal evolution during the Contrasts expedition.
+  </figcaption>
+</figure>
