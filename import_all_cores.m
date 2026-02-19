@@ -748,7 +748,7 @@ tiledlayout(1,3,'Padding','compact','TileSpacing','compact');
 
 markers = containers.Map([1 2 3], {'o','s','^'});
 c = datenum(t);
-load("managua.mat"); colormap(managua);
+load("managua.mat"); colormap(flipud(managua));
 
 % ===== Panel 1: Salinity =====
 nexttile; hold on; box on;
