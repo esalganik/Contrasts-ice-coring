@@ -2,8 +2,8 @@
 clear; close all; clc
 tStart = tic;
 
-rootFolder = "C:\Users\evsalg001\Documents\MATLAB\Contrasts coring\Data";
-filePatterns = ["*-RHO.xlsx","*-RHO-TXT.xlsx","*-SALO18.xlsx","*-T.xlsx"];
+rootFolder = "C:\Users\evsalg001\Documents\MATLAB\Contrasts coring\Data"; % Folder with coring protocols
+filePatterns = ["*-RHO.xlsx","*-RHO-TXT.xlsx","*-SALO18.xlsx","*-T.xlsx"]; % Names of imported cores
 allFiles = [];
 
 for fp = filePatterns
@@ -236,16 +236,16 @@ MAP.GPS_Lon      = "GPS_Lon";
 MAP.Station      = "Station";
 MAP.IceAge       = "IceAge";
 MAP.MeltPond     = "MeltPond";
-MAP.Comments     = "";              % e.g. "Comments" if you have it explicitly
+MAP.Comments     = "";
 
 % RHO-specific
-MAP.Depth1       = "";              % will default to first column if empty
-MAP.Depth2       = "";              % will default to second column if empty
-MAP.Salinity_raw = "salinity";      % from import script (in RHO table)
-MAP.Salinity_used= "Salinity_used"; % from processing
-MAP.Tlab         = "Tlab";          % from import script
-MAP.T_ice        = "Temperature_interp"; % interpolated temperature at RHO depths
-MAP.Rho_si       = "rho_si";        % computed in-situ density (kg/m3)
+MAP.Depth1       = "";
+MAP.Depth2       = "";
+MAP.Salinity_raw = "salinity";
+MAP.Salinity_used= "Salinity_used";
+MAP.Tlab         = "Tlab";
+MAP.T_ice        = "Temperature_interp";
+MAP.Rho_si       = "rho_si"; % computed density (kg/m3)
 
 MAP.Vb_export    = "vb_rho_export"; % NaN if raw >0.4 or <0
 MAP.Vg_pr        = "vg_pr";
@@ -289,7 +289,7 @@ if isfield(T_all,'SALO18') && ~isempty(T_all.SALO18)
     end
 end
 
-% 2) Make processed copy + ensure processed columns exist
+% 2) Make processed copy
 T_all_proc = T_all;
 
 needCols = ["rho_si","rho_lab_kgm3","Salinity_used","Temperature_interp", ...
@@ -301,7 +301,7 @@ for c = needCols
     end
 end
 
-% 3) Match T and RHO cores (your logic)
+% 3) Match T and RHO cores
 Tmatch = table(strings(0,1), strings(0,1), strings(0,1), strings(0,1), ...
                'VariableNames', {'Station','Core','T_File','RHO_File'});
 
@@ -364,12 +364,12 @@ for i = 1:nPairs
         continue
     end
 
-    % --- Depth midpoints for RHO (assume first 2 columns are depth bounds) ---
+    % --- Depth midpoints for RHO ---
     depth_rho = mean(T_rho{:,1:2}, 2);
 
-    % --- Temperature profile (assume first col=depth, second col=temp in T core) ---
+    % --- Temperature profile ---
     depth_T = T_T{:,1};
-    temp    = min(-0.1, T_T{:,2}); % cap as in your code
+    temp    = min(-0.1, T_T{:,2});
     ok = ~isnan(depth_T) & ~isnan(temp);
     depth_T = depth_T(ok);
     temp    = temp(ok);
@@ -383,7 +383,7 @@ for i = 1:nPairs
     depth_T_rescaled = depth_T * (max(depth_rho) / max(depth_T));
     T_interp = interp1(depth_T_rescaled, temp, depth_rho, 'linear', 'extrap');
 
-    % --- Salinity used: from RHO salinity column (your import created T.salinity) ---
+    % --- Salinity used: from RHO salinity column ---
     if ismember(MAP.Salinity_raw, T_rho.Properties.VariableNames)
         Srho = T_rho.(MAP.Salinity_raw);
     else
@@ -411,7 +411,7 @@ for i = 1:nPairs
         end
     end
 
-    % --- Lab temperature (your import created Tlab) ---
+    % --- Lab temperature ---
     if ismember(MAP.Tlab, T_rho.Properties.VariableNames)
         T_lab = T_rho.(MAP.Tlab);
     else
@@ -707,6 +707,291 @@ writetable(T_all_proc.SALO18_out, outXlsx, "Sheet", "SALO18", "WriteMode", "over
 
 fprintf("Exported to %s (sheets: RHO, T, SALO18)\n", outXlsx);
 
+%% Vertical profiles of salinity, density and temperature
+% Panels: Salinity / Density / Temperature vs depth
+% Color = date
+% Marker = station number (1,2,3)
+
+clear; close all; clc
+load('Coring_data_processed.mat','T_all_proc');
+
+rho = T_all_proc.rho_out;
+
+% ---- Extract columns ----
+t   = rho{:,2};
+st_raw  = string(rho{:,8});
+z1  = rho{:,11};
+z2  = rho{:,12};
+S   = rho{:,13};
+Temp = rho{:,15};
+Den  = rho{:,16};
+
+zmid = mean([z1 z2], 2);
+
+% ---- Station number from "IceStation1a" -> 1 ----
+stationGroup = str2double(regexp(st_raw, '\d+', 'match', 'once'));
+
+% ---- Clean rows ----
+ok = ~isnan(zmid) & ~isnan(S) & ~isnan(Temp) & ~isnan(Den) & ...
+     ~isnat(t) & ismember(stationGroup,[1 2 3]);
+
+zmid = zmid(ok);
+S    = S(ok);
+Temp = Temp(ok);
+Den  = Den(ok);
+t    = t(ok);
+stationGroup = stationGroup(ok);
+
+% ---- Plot setup ----
+figure('Color','w');
+tiledlayout(1,3,'Padding','compact','TileSpacing','compact');
+
+markers = containers.Map([1 2 3], {'o','s','^'});
+c = datenum(t);
+load("managua.mat"); colormap(managua);
+
+% ===== Panel 1: Salinity =====
+nexttile; hold on; box on;
+for st = [1 2 3]
+    idx = stationGroup == st;
+    if any(idx)
+        scatter(S(idx), zmid(idx), 25, c(idx), markers(st), 'filled');
+    end
+end
+set(gca,'YDir','reverse');
+xlabel('Salinity');
+ylabel('Depth');
+title('Salinity');
+
+% ===== Panel 2: Density =====
+nexttile; hold on; box on;
+for st = [1 2 3]
+    idx = stationGroup == st;
+    if any(idx)
+        scatter(Den(idx), zmid(idx), 25, c(idx), markers(st), 'filled');
+    end
+end
+set(gca,'YDir','reverse');
+xlabel('Density (kg/m^3)');
+title('Density');
+
+% ===== Panel 3: Temperature =====
+nexttile; hold on; box on;
+for st = [1 2 3]
+    idx = stationGroup == st;
+    if any(idx)
+        scatter(Temp(idx), zmid(idx), 25, c(idx), markers(st), 'filled');
+    end
+end
+set(gca,'YDir','reverse');
+xlabel('Temperature (°C)');
+title('Temperature');
+
+% ---- Colorbar ----
+cb = colorbar;
+cb.Layout.Tile = 'east';
+cb.Label.String = 'Date';
+if ~isempty(c)
+    clim([min(c) max(c)]);
+    ticks = linspace(min(c), max(c), 6);
+    cb.Ticks = ticks;
+    cb.TickLabels = cellstr(datestr(ticks,'mmm dd'));
+end
+
+% ---- Marker legend ----
+h1 = scatter(nan,nan,10,[0 0 0],'o','filled');
+h2 = scatter(nan,nan,10,[0 0 0],'s','filled');
+h3 = scatter(nan,nan,10,[0 0 0],'^','filled');
+lgd = legend([h1 h2 h3], {'Station 1','Station 2','Station 3'}, ...
+       'Location','northoutside','Orientation','horizontal');
+lgd.Layout.Tile = 'north';
+
+set(gcf,'Units','inches','Position',[5 5 6 4])
+exportgraphics(gcf,'Vertical_profiles_SDT.png','Resolution',300)
+
+%% 3-panel plot (RHO+SALO18 salinity, RHO density, T temperature)
+clear; close all; clc
+load('Coring_data_processed.mat','T_all_proc','Tmatch');   % contains T_all_proc.(rho,T,SALO18) + Tmatch
+
+% ---------- 1) Standardize types ----------
+T_all_proc.rho.SourceFile   = string(T_all_proc.rho.SourceFile);
+T_all_proc.T.SourceFile     = string(T_all_proc.T.SourceFile);
+T_all_proc.SALO18.SourceFile= string(T_all_proc.SALO18.SourceFile);
+
+T_all_proc.rho.Station      = string(T_all_proc.rho.Station);
+T_all_proc.T.Station        = string(T_all_proc.T.Station);
+T_all_proc.SALO18.Station   = string(T_all_proc.SALO18.Station);
+
+Tmatch.T_File   = string(Tmatch.T_File);
+Tmatch.RHO_File = string(Tmatch.RHO_File);
+Tmatch.Station  = string(Tmatch.Station);
+
+% ---------- 2) Add CoreID (one integer per unique file, repeated for each row) ----------
+[~,~,T_all_proc.rho.CoreID]    = unique(T_all_proc.rho.SourceFile,    'stable');
+[~,~,T_all_proc.T.CoreID]      = unique(T_all_proc.T.SourceFile,      'stable');
+[~,~,T_all_proc.SALO18.CoreID] = unique(T_all_proc.SALO18.SourceFile, 'stable');
+
+% ---------- 3) Pick the columns ----------
+rhoLabVar = "rho_lab_kgm3";     % preferred lab density variable (kg/m^3) in RHO table
+rhoSalVar = "Salinity_used";    % preferred salinity variable in RHO table (can be "salinity")
+tTempVar  = string(T_all_proc.T.Properties.VariableNames{2}); % temperature column in T table (or set explicitly)
+
+% If rhoLabVar / rhoSalVar do not exist, fallback to sensible defaults
+if ~ismember(rhoLabVar, T_all_proc.rho.Properties.VariableNames)
+    rhoLabVar = string(T_all_proc.rho.Properties.VariableNames{3});  % old assumption
+end
+if ~ismember(rhoSalVar, T_all_proc.rho.Properties.VariableNames)
+    if ismember("salinity", T_all_proc.rho.Properties.VariableNames)
+        rhoSalVar = "salinity";
+    else
+        rhoSalVar = ""; % no RHO salinity available
+    end
+end
+
+% ---------- 4) Make timezone-naive time columns for plotting (prevents tz errors) ----------
+rhoTime = NaT(height(T_all_proc.rho),1);
+if ismember("GPS_Time", T_all_proc.rho.Properties.VariableNames) && isa(T_all_proc.rho.GPS_Time,'datetime')
+    rhoTime = T_all_proc.rho.GPS_Time;
+    if ~isempty(rhoTime.TimeZone), rhoTime.TimeZone = ''; end
+elseif ismember("Time_best", T_all_proc.rho.Properties.VariableNames) && isa(T_all_proc.rho.Time_best,'datetime')
+    rhoTime = T_all_proc.rho.Time_best;
+    if ~isempty(rhoTime.TimeZone), rhoTime.TimeZone = ''; end
+end
+
+saloTime = NaT(height(T_all_proc.SALO18),1);
+if ismember("GPS_Time", T_all_proc.SALO18.Properties.VariableNames) && isa(T_all_proc.SALO18.GPS_Time,'datetime')
+    saloTime = T_all_proc.SALO18.GPS_Time;
+    if ~isempty(saloTime.TimeZone), saloTime.TimeZone = ''; end
+else
+    % fallback: first datetime column if exists
+    isDT = varfun(@(x) isa(x,'datetime'), T_all_proc.SALO18, 'OutputFormat','uniform');
+    dtVars = string(T_all_proc.SALO18.Properties.VariableNames(isDT));
+    if ~isempty(dtVars)
+        saloTime = T_all_proc.SALO18.(dtVars(1));
+        if ~isempty(saloTime.TimeZone), saloTime.TimeZone = ''; end
+    end
+end
+
+% ---------- 5) Precompute per-core aggregates (fast, clean) ----------
+nR = max(T_all_proc.rho.CoreID);
+nT = max(T_all_proc.T.CoreID);
+
+rhoCoreTime      = splitapply(@firstOrNaT, rhoTime,                         T_all_proc.rho.CoreID);
+rhoCoreDenLab    = splitapply(@(x) mean(x,'omitnan'), T_all_proc.rho.(rhoLabVar), T_all_proc.rho.CoreID);
+rhoCoreSal       = NaN(nR,1);
+if rhoSalVar ~= ""
+    rhoCoreSal   = splitapply(@(x) mean(x,'omitnan'), T_all_proc.rho.(rhoSalVar), T_all_proc.rho.CoreID);
+end
+
+tCoreTemp         = splitapply(@(x) mean(x,'omitnan'), T_all_proc.T.(tTempVar),   T_all_proc.T.CoreID);
+
+% density unit safety: if looks like g/cm^3, convert to kg/m^3
+mDen = mean(rhoCoreDenLab,'omitnan');
+if ~isnan(mDen) && mDen < 5
+    rhoCoreDenLab = rhoCoreDenLab * 1000;
+end
+
+% ---------- 6) SALO18 salinity as one point per SALO18 core file ----------
+% (mean salinity col 3 + time = first non-missing time in that file)
+saloSal = splitapply(@(x) mean(x,'omitnan'), T_all_proc.SALO18{:,3}, T_all_proc.SALO18.CoreID);
+saloCoreTime = splitapply(@firstOrNaT, saloTime, T_all_proc.SALO18.CoreID);
+
+% station per SALO18 core (first row station)
+saloStation = splitapply(@(x) string(x(1)), T_all_proc.SALO18.Station, T_all_proc.SALO18.CoreID);
+
+saloSummary = table(saloCoreTime, saloStation, saloSal, ...
+    'VariableNames', ["Time","Station","AvgSal_SALO18"]);
+saloSummary = saloSummary(~ismissing(saloSummary.Time) & ~isnan(saloSummary.AvgSal_SALO18), :);
+saloSummary = sortrows(saloSummary,"Time");
+
+% ---------- 7) Build matched-core summary (one row per matched pair) ----------
+rhoFileList = unique(T_all_proc.rho.SourceFile, 'stable');
+tFileList   = unique(T_all_proc.T.SourceFile,   'stable');
+rhoID = containers.Map(rhoFileList, 1:numel(rhoFileList));
+tID   = containers.Map(tFileList,   1:numel(tFileList));
+
+RHO_ID = arrayfun(@(s) rhoID(s), Tmatch.RHO_File);
+T_ID   = arrayfun(@(s) tID(s),   Tmatch.T_File);
+
+CoreSummary = table;
+CoreSummary.Time         = rhoCoreTime(RHO_ID);
+CoreSummary.Station      = Tmatch.Station;
+CoreSummary.StationGroup = str2double(regexp(CoreSummary.Station,'\d+','match','once'));
+CoreSummary.AvgSal_RHO   = rhoCoreSal(RHO_ID);
+CoreSummary.AvgDenLab    = rhoCoreDenLab(RHO_ID);
+CoreSummary.AvgTemp      = tCoreTemp(T_ID);
+
+CoreSummary = CoreSummary(~ismissing(CoreSummary.Time), :);
+CoreSummary = sortrows(CoreSummary,"Time");
+
+% Optional: keep only station groups 1/2/3
+CoreSummary = CoreSummary(ismember(CoreSummary.StationGroup,[1 2 3]) & ~isnan(CoreSummary.StationGroup), :);
+saloSummary.StationGroup = str2double(regexp(saloSummary.Station,'\d+','match','once'));
+saloSummary = saloSummary(ismember(saloSummary.StationGroup,[1 2 3]) & ~isnan(saloSummary.StationGroup), :);
+
+% ---------- 8) Plot ----------
+stations = unique(CoreSummary.StationGroup,'stable');
+colors   = lines(max(3,numel(stations)));
+
+figure('Color','w');
+tiledlayout(3,1,'Padding','compact','TileSpacing','compact');
+
+% Panel 1: Salinity from BOTH datasets (RHO circles, SALO18 triangles)
+nexttile; hold on; box on; grid on;
+for s = 1:numel(stations)
+    st = stations(s);
+    c  = colors(min(s,size(colors,1)),:);
+
+    idxR = CoreSummary.StationGroup==st & ~isnan(CoreSummary.AvgSal_RHO);
+    scatter(CoreSummary.Time(idxR), CoreSummary.AvgSal_RHO(idxR), 60, c, 'o', 'filled');
+
+    idxS = saloSummary.StationGroup==st;
+    scatter(saloSummary.Time(idxS), saloSummary.AvgSal_SALO18(idxS), 60, c, '^');
+end
+ylabel('Ice salinity');
+title('Salinity vs time');
+% legend (simple)
+hSt = gobjects(0); labSt = strings(0);
+for s = 1:numel(stations)
+    c = colors(min(s,size(colors,1)),:);
+    hSt(end+1) = scatter(nan,nan,60,c,'s','filled');
+    labSt(end+1)= "Station " + string(stations(s));
+end
+hR = scatter(nan,nan,60,[0 0 0],'o','filled');
+hS = scatter(nan,nan,60,[0 0 0],'^');
+legend([hSt hR hS],[labSt "RHO" "SALO18"],'Location','northoutside','NumColumns',5);
+
+% Panel 2: Lab density
+nexttile; hold on; box on; grid on;
+for s = 1:numel(stations)
+    st = stations(s);
+    c  = colors(min(s,size(colors,1)),:);
+    idx = CoreSummary.StationGroup==st & ~isnan(CoreSummary.AvgDenLab);
+    scatter(CoreSummary.Time(idx), CoreSummary.AvgDenLab(idx), 60, c, 'o', 'filled');
+end
+ylabel('Ice density (kg/m^3)');
+title('Lab density vs time');
+
+% Panel 3: Temperature
+nexttile; hold on; box on; grid on;
+for s = 1:numel(stations)
+    st = stations(s);
+    c  = colors(min(s,size(colors,1)),:);
+    idx = CoreSummary.StationGroup==st & ~isnan(CoreSummary.AvgTemp);
+    scatter(CoreSummary.Time(idx), CoreSummary.AvgTemp(idx), 60, c, 'o', 'filled');
+end
+ylabel('Ice temperature (°C)');
+title('Temperature vs time');
+
+set(gcf,'Units','inches','Position',[5 5 6 6])
+exportgraphics(gcf,'Density_salinity_temperature_vs_time.png','Resolution',300)
+
+% ---------- local helper (tiny, to keep the rest clean) ----------
+function t = firstOrNaT(x)
+    k = find(~ismissing(x), 1, 'first');
+    if isempty(k), t = NaT; else, t = x(k); end
+end
+
 %% Plot avg lab density + avg in-situ density vs ice thickness (station = color, lab/in-situ = marker)
 % Uses ONLY saved raw tables: T_all_proc + Tmatch from Coring_data_processed.mat
 % Station grouping: "1a/1b/1c" -> station group 1 (same color)
@@ -743,7 +1028,7 @@ for i = 1:nPairs
         stationGroup(i) = str2double(token);
     end
 
-    % Lab density (prefer rho_lab_kgm3 if present; else use 3rd col and convert if needed)
+    % Lab density
     if ismember('rho_lab_kgm3', RHOcore.Properties.VariableNames)
         avgLabDensity(i) = mean(RHOcore.rho_lab_kgm3, 'omitnan');
     else
@@ -753,12 +1038,12 @@ for i = 1:nPairs
         avgLabDensity(i) = mean(v,'omitnan');
     end
 
-    % In-situ density (if present)
+    % In-situ density
     if ismember('rho_si', RHOcore.Properties.VariableNames)
         avgInSituDensity(i) = mean(RHOcore.rho_si, 'omitnan');
     end
 
-    % Ice thickness: keep your "column 8" assumption but guard; else guess by name
+    % Ice thickness
     if width(RHOcore) >= 8 && isnumeric(RHOcore{:,8})
         iceThickness(i) = mean(RHOcore{:,8}, 'omitnan');
     else
@@ -770,7 +1055,7 @@ for i = 1:nPairs
     end
 end
 
-% Keep only usable rows (need thickness + station group + at least one density)
+% Keep only usable rows
 ok = ~isnan(iceThickness) & ~isnan(stationGroup) & (~isnan(avgLabDensity) | ~isnan(avgInSituDensity));
 avgLabDensity    = avgLabDensity(ok);
 avgInSituDensity = avgInSituDensity(ok);
@@ -805,7 +1090,7 @@ for s = 1:numel(stations)
     % Lab density points
     idxLab = idxS & ~isnan(avgLabDensity);
     if any(idxLab)
-        scatter(iceThickness(idxLab), avgLabDensity(idxLab), sz, c, mkLab, 'filled');
+        scatter(iceThickness(idxLab), avgLabDensity(idxLab), sz, c, mkLab);
     end
 
     % In-situ density points
@@ -818,7 +1103,6 @@ end
 xlabel('Ice thickness (m)');
 ylabel('Average sea-ice density (kg/m^3)');
 title('Average sea-ice density vs ice thickness');
-grid on;
 
 % Legend: station colors + marker meaning (lab vs in-situ)
 legendHandles = gobjects(0);
@@ -834,7 +1118,7 @@ for s = 1:numel(stations)
 end
 
 % Marker meaning (dummy black)
-h1 = scatter(nan,nan,sz,[0 0 0],mkLab,'filled');
+h1 = scatter(nan,nan,sz,[0 0 0],mkLab);
 h2 = scatter(nan,nan,sz,[0 0 0],mkInSitu,'filled');
 legendHandles(end+1:end+2) = [h1 h2];
 legendLabels(end+1:end+2)  = ["Lab density", "In-situ density"];
@@ -843,358 +1127,6 @@ legend(legendHandles, legendLabels, 'Location','southeast');
 
 set(gcf,'Units','inches','Position',[5 5 6 4])
 exportgraphics(gcf,'Density_vs_Thickness.png','Resolution',300)
-
-%% Plot: 3 panels (Avg Salinity / Avg Lab Density / Avg Temperature) vs time
-clear; close all; clc
-
-% Load what you actually have (change filename if needed)
-load('Coring_data_processed.mat','T_all_proc','Tmatch');
-
-% --- Safety: make these strings for matching/grouping ---
-Tmatch.T_File   = string(Tmatch.T_File);
-Tmatch.RHO_File = string(Tmatch.RHO_File);
-Tmatch.Station  = string(Tmatch.Station);
-
-T_all_proc.rho.SourceFile = string(T_all_proc.rho.SourceFile);
-T_all_proc.T.SourceFile   = string(T_all_proc.T.SourceFile);
-T_all_proc.rho.Station    = string(T_all_proc.rho.Station);
-
-% --- Ensure a usable "best time" exists in rho table (timezone-safe) ---
-if ~ismember("Time_best", T_all_proc.rho.Properties.VariableNames)
-    T_all_proc.rho = addTimeBest(T_all_proc.rho, "GPS_Time");
-end
-
-% --- Choose salinity variable (prefer Salinity_used) ---
-if ismember("Salinity_used", T_all_proc.rho.Properties.VariableNames)
-    salVar = "Salinity_used";
-elseif ismember("salinity", T_all_proc.rho.Properties.VariableNames)
-    salVar = "salinity";
-else
-    salVar = ""; % will become NaN
-end
-
-% --- Choose temperature variable for T cores (prefer name-based, else 2nd column) ---
-tVars = string(T_all_proc.T.Properties.VariableNames);
-tempCandidates = tVars(contains(lower(tVars),"temp"));
-if ~isempty(tempCandidates)
-    tVarTemp = tempCandidates(1);
-else
-    tVarTemp = tVars(min(2,numel(tVars)));
-end
-
-% --- Choose lab density variable in rho table robustly ---
-% Priority:
-% 1) variable name contains "density" or "rho" BUT NOT "rho_si"
-% 2) fallback to 3rd column (your original assumption)
-rVars = string(T_all_proc.rho.Properties.VariableNames);
-cand = rVars((contains(lower(rVars),"density") | contains(lower(rVars),"rho")) & ~contains(lower(rVars),"rho_si"));
-if ~isempty(cand)
-    rhoVarLab = cand(1);
-else
-    rhoVarLab = rVars(min(3,numel(rVars)));
-end
-
-% --- Build per-pair averages (one point per matched core) ---
-nPairs = height(Tmatch);
-
-Time_core     = NaT(nPairs,1);
-StationRaw    = Tmatch.Station;
-AvgSalinity   = NaN(nPairs,1);
-AvgDensityLab = NaN(nPairs,1);
-AvgTemp       = NaN(nPairs,1);
-
-for i = 1:nPairs
-    rhoCore = T_all_proc.rho(T_all_proc.rho.SourceFile == Tmatch.RHO_File(i), :);
-    tCore   = T_all_proc.T(  T_all_proc.T.SourceFile   == Tmatch.T_File(i), :);
-
-    if isempty(rhoCore) || isempty(tCore)
-        continue
-    end
-
-    % Time: first non-missing Time_best from rhoCore
-    if ismember("Time_best", rhoCore.Properties.VariableNames)
-        k = find(~ismissing(rhoCore.Time_best), 1, 'first');
-        if ~isempty(k)
-            Time_core(i) = rhoCore.Time_best(k);
-        end
-    end
-
-    % Avg salinity
-    if salVar ~= "" && ismember(salVar, rhoCore.Properties.VariableNames)
-        AvgSalinity(i) = mean(rhoCore.(salVar), 'omitnan');
-    end
-
-    % Avg lab density
-    if ismember(rhoVarLab, rhoCore.Properties.VariableNames)
-        d = mean(rhoCore.(rhoVarLab), 'omitnan');
-    
-        if ~isnan(d) && d < 5
-            d = d * 1000;
-        end
-
-        AvgDensityLab(i) = d;
-    end
-
-    % Avg temperature
-    if ismember(tVarTemp, tCore.Properties.VariableNames)
-        AvgTemp(i) = mean(tCore.(tVarTemp), 'omitnan');
-    end
-end
-
-plotTbl = table(Time_core, StationRaw, AvgSalinity, AvgDensityLab, AvgTemp, ...
-    'VariableNames', ["Time_core","Station","AvgSalinity","AvgDensityLab","AvgTemp"]);
-
-% Drop rows with no time (otherwise the x-axis is empty)
-plotTbl = plotTbl(~ismissing(plotTbl.Time_core), :);
-
-% If STILL empty, show a useful error message instead of plotting nothing
-if isempty(plotTbl)
-    error("Plot table is empty: no valid Time_core values found. Check that T_all_proc.rho has GPS_Time or a datetime metadata column.");
-end
-
-% Sort by time for nicer plots
-plotTbl = sortrows(plotTbl, "Time_core");
-
-% --- Station grouping: "1a/1b/1c" -> group 1, etc.
-% Use FIRST digit sequence found anywhere in the station string (more robust than ^\d+)
-plotTbl.StationGroup = str2double(regexp(plotTbl.Station, '\d+', 'match', 'once'));
-
-% Keep only groups 1,2,3 IF they exist; otherwise keep whatever exists
-have123 = any(ismember(plotTbl.StationGroup, [1 2 3]));
-if have123
-    plotTbl = plotTbl(ismember(plotTbl.StationGroup, [1 2 3]), :);
-end
-
-% If StationGroup is still mostly NaN, fall back to treating each unique station separately
-useGroup = ~all(isnan(plotTbl.StationGroup));
-
-% --- Markers for station groups 1/2/3 (or for unique station names fallback) ---
-markerList = ['o','s','^','d','v','x','p','h','+','*'];
-
-% --- Plot: 3 panels ---
-figure;
-tiledlayout(3,1,'Padding','compact','TileSpacing','compact');
-
-% Panel 1: Salinity
-nexttile; hold on; box on; grid on;
-if useGroup
-    stations = unique(plotTbl.StationGroup(~isnan(plotTbl.StationGroup)),'stable');
-    for s = 1:numel(stations)
-        st = stations(s);
-        idx = plotTbl.StationGroup == st;
-        mk = markerList(min(s, numel(markerList)));
-        plot(plotTbl.Time_core(idx), plotTbl.AvgSalinity(idx), mk, 'LineStyle','none', ...
-            'DisplayName', sprintf('Station %g', st));
-    end
-else
-    stations = unique(plotTbl.Station,'stable');
-    for s = 1:numel(stations)
-        st = stations(s);
-        idx = plotTbl.Station == st;
-        mk = markerList(min(s, numel(markerList)));
-        plot(plotTbl.Time_core(idx), plotTbl.AvgSalinity(idx), mk, 'LineStyle','none', ...
-            'DisplayName', "Station " + st);
-    end
-end
-ylabel('Ice salinity');
-title('Ie salinity vs time');
-legend('Location','northoutside','NumColumns',3);
-
-% Panel 2: Lab density
-nexttile; hold on; box on; grid on;
-if useGroup
-    stations = unique(plotTbl.StationGroup(~isnan(plotTbl.StationGroup)),'stable');
-    for s = 1:numel(stations)
-        st = stations(s);
-        idx = plotTbl.StationGroup == st;
-        mk = markerList(min(s, numel(markerList)));
-        plot(plotTbl.Time_core(idx), plotTbl.AvgDensityLab(idx), mk, 'LineStyle','none', ...
-            'MarkerFaceColor','auto','DisplayName', sprintf('Station %g', st));
-    end
-else
-    stations = unique(plotTbl.Station,'stable');
-    for s = 1:numel(stations)
-        st = stations(s);
-        idx = plotTbl.Station == st;
-        mk = markerList(min(s, numel(markerList)));
-        plot(plotTbl.Time_core(idx), plotTbl.AvgDensityLab(idx), mk, 'LineStyle','none', ...
-            'MarkerFaceColor','auto','DisplayName', "Station " + st);
-    end
-end
-ylabel('Ice density (kg/m^3)');
-title('Ice density vs Time');
-
-% Panel 3: Temperature
-nexttile; hold on; box on; grid on;
-if useGroup
-    stations = unique(plotTbl.StationGroup(~isnan(plotTbl.StationGroup)),'stable');
-    for s = 1:numel(stations)
-        st = stations(s);
-        idx = plotTbl.StationGroup == st;
-        mk = markerList(min(s, numel(markerList)));
-        plot(plotTbl.Time_core(idx), plotTbl.AvgTemp(idx), mk, 'LineStyle','none', ...
-            'DisplayName', sprintf('Station %g', st));
-    end
-else
-    stations = unique(plotTbl.Station,'stable');
-    for s = 1:numel(stations)
-        st = stations(s);
-        idx = plotTbl.Station == st;
-        mk = markerList(min(s, numel(markerList)));
-        plot(plotTbl.Time_core(idx), plotTbl.AvgTemp(idx), mk, 'LineStyle','none', ...
-            'DisplayName', "Station " + st);
-    end
-end
-ylabel('Ice temperature (°C)');
-title('Ice temperature vs Time');
-
-set(gcf,'Units','inches','Position',[5 5 6 6])
-exportgraphics(gcf,'Density_salinity_temperature_vs_time.png','Resolution',300)
-
-%% 3-panel scatter plot: Avg Salinity / Density / Temperature vs Time
-
-clear; close all; clc
-load('Coring_data_processed.mat','T_all_proc','Tmatch')
-
-Tmatch.T_File   = string(Tmatch.T_File);
-Tmatch.RHO_File = string(Tmatch.RHO_File);
-Tmatch.Station  = string(Tmatch.Station);
-
-T_all_proc.rho.SourceFile = string(T_all_proc.rho.SourceFile);
-T_all_proc.T.SourceFile   = string(T_all_proc.T.SourceFile);
-
-% Choose columns
-rhoVarLab = T_all_proc.rho.Properties.VariableNames{3};  % lab density (as used before)
-tVarTemp  = T_all_proc.T.Properties.VariableNames{2};    % temperature (as used before)
-
-if ismember("Salinity_used", T_all_proc.rho.Properties.VariableNames)
-    salVar = "Salinity_used";
-elseif ismember("salinity", T_all_proc.rho.Properties.VariableNames)
-    salVar = "salinity";
-else
-    salVar = "";
-end
-
-nPairs = height(Tmatch);
-
-% IMPORTANT: make Time_core timezone-aware to match GPS_Time
-Time_core     = NaT(nPairs,1,'TimeZone','UTC');
-StationRaw    = Tmatch.Station;
-AvgSalinity   = NaN(nPairs,1);
-AvgDensityLab = NaN(nPairs,1);
-AvgTemp       = NaN(nPairs,1);
-
-for i = 1:nPairs
-    rhoCore = T_all_proc.rho(T_all_proc.rho.SourceFile == Tmatch.RHO_File(i), :);
-    tCore   = T_all_proc.T(  T_all_proc.T.SourceFile   == Tmatch.T_File(i), :);
-
-    if isempty(rhoCore) || isempty(tCore)
-        continue
-    end
-
-    % Time: GPS_Time (first non-missing)
-    if ismember("GPS_Time", rhoCore.Properties.VariableNames) && isa(rhoCore.GPS_Time,'datetime')
-        k = find(~ismissing(rhoCore.GPS_Time), 1, 'first');
-        if ~isempty(k)
-            t = rhoCore.GPS_Time(k);
-            % Ensure UTC (in case something slipped in)
-            if isempty(t.TimeZone)
-                t.TimeZone = 'UTC';
-            else
-                t = datetime(t,'TimeZone','UTC');
-            end
-            Time_core(i) = t;
-        end
-    end
-
-    % Averages
-    if salVar ~= "" && ismember(salVar, rhoCore.Properties.VariableNames)
-        AvgSalinity(i) = mean(rhoCore.(salVar), 'omitnan');
-    end
-
-    if ismember(rhoVarLab, rhoCore.Properties.VariableNames)
-        AvgDensityLab(i) = mean(rhoCore.(rhoVarLab), 'omitnan');
-    end
-
-    if ismember(tVarTemp, tCore.Properties.VariableNames)
-        AvgTemp(i) = mean(tCore.(tVarTemp), 'omitnan');
-    end
-end
-
-plotTbl = table(Time_core, StationRaw, AvgSalinity, AvgDensityLab, AvgTemp, ...
-    'VariableNames', ["Time_core","Station","AvgSalinity","AvgDensityLab","AvgTemp"]);
-
-% Keep rows with valid time
-plotTbl = plotTbl(~ismissing(plotTbl.Time_core), :);
-
-if isempty(plotTbl)
-    error("Nothing to plot: all Time_core are missing. Check T_all_proc.rho.GPS_Time.");
-end
-
-% Sort by time
-plotTbl = sortrows(plotTbl, "Time_core");
-
-% Station grouping: "1a/1b/1c" -> 1; "2b" -> 2; etc.
-plotTbl.StationGroup = str2double(regexp(plotTbl.Station, '\d+', 'match', 'once'));
-
-% Keep only groups 1,2,3 (and drop NaN groups)
-plotTbl = plotTbl(ismember(plotTbl.StationGroup, [1 2 3]), :);
-
-if isempty(plotTbl)
-    error("Nothing to plot after filtering to station groups 1/2/3. Check your Station strings in Tmatch.Station.");
-end
-
-stations = unique(plotTbl.StationGroup, 'stable');
-
-% Colors/markers for station groups 1/2/3
-colors  = lines(3);
-markerMap = containers.Map('KeyType','double','ValueType','char');
-markerMap(1) = 'o';
-markerMap(2) = 's';
-markerMap(3) = '^';
-
-figure;
-tiledlayout(3,1,'Padding','compact','TileSpacing','compact');
-
-% Panel 1: Salinity
-nexttile; hold on; box on; grid on;
-for s = 1:numel(stations)
-    st = stations(s);
-    idx = plotTbl.StationGroup == st;
-    c = colors(st,:);          % st is 1/2/3
-    mk = markerMap(st);
-    scatter(plotTbl.Time_core(idx), plotTbl.AvgSalinity(idx), 80, c, mk, 'filled', ...
-        'DisplayName', sprintf('Station %d', st));
-end
-ylabel('Ice salinity')
-title('Ice salinity vs time')
-legend('Location','northoutside','NumColumns',3);
-
-% Panel 2: Lab Density
-nexttile; hold on; box on; grid on;
-for s = 1:numel(stations)
-    st = stations(s);
-    idx = plotTbl.StationGroup == st;
-    c = colors(st,:);
-    mk = markerMap(st);
-    scatter(plotTbl.Time_core(idx), plotTbl.AvgDensityLab(idx), 80, c, mk, 'filled', ...
-        'DisplayName', sprintf('Station %d', st));
-end
-ylabel('Ice density')
-title('Ice density vs time')
-
-% Panel 3: Temperature
-nexttile; hold on; box on; grid on;
-for s = 1:numel(stations)
-    st = stations(s);
-    idx = plotTbl.StationGroup == st;
-    c = colors(st,:);
-    mk = markerMap(st);
-    scatter(plotTbl.Time_core(idx), plotTbl.AvgTemp(idx), 80, c, mk, 'filled', ...
-        'DisplayName', sprintf('Station %d', st));
-end
-ylabel('Ice temperature (°C)')
-title('Ice temperature vs time')
 
 %% Collect unique names + count occurrences
 clear; close all; clc
@@ -1310,29 +1242,6 @@ function tbl = addMeltPond01(tbl, meltVar)
     end
 end
 
-function tbl = addTimeBest(tbl, gpsTimeVar)
-    % Time_best = GPS_Time if present (converted to timezone-naive), else first other datetime col
-    n = height(tbl);
-    tbl.Time_best = NaT(n,1);   % timezone-naive
-
-    if ismember(gpsTimeVar, tbl.Properties.VariableNames) && isa(tbl.(gpsTimeVar), 'datetime')
-        t = tbl.(gpsTimeVar);
-        if ~isempty(t.TimeZone), t.TimeZone = ''; end
-        tbl.Time_best = t;
-    end
-
-    isDT = varfun(@(x) isa(x,'datetime'), tbl, 'OutputFormat','uniform');
-    dtVars = string(tbl.Properties.VariableNames(isDT));
-    dtVars = setdiff(dtVars, ["Time_best", string(gpsTimeVar)], 'stable');
-
-    if ~isempty(dtVars)
-        fb = tbl.(dtVars(1));
-        if isa(fb,'datetime') && ~isempty(fb.TimeZone), fb.TimeZone = ''; end
-        miss = ismissing(tbl.Time_best);
-        tbl.Time_best(miss) = fb(miss);
-    end
-end
-
 function vname = guessVar(tbl, patterns, fallback)
     names = string(tbl.Properties.VariableNames);
     vname = fallback;
@@ -1352,5 +1261,27 @@ function tbl = applyRenameMap(tbl, renameMap)
         if ismember(oldName, tbl.Properties.VariableNames)
             tbl = renamevars(tbl, oldName, newName);
         end
+    end
+end
+
+function tbl = addTimeBest(tbl, gpsTimeVar)
+    n = height(tbl);
+    tbl.Time_best = NaT(n,1);
+
+    if ismember(gpsTimeVar, tbl.Properties.VariableNames) && isa(tbl.(gpsTimeVar),'datetime')
+        t = tbl.(gpsTimeVar);
+        if ~isempty(t.TimeZone), t.TimeZone = ''; end
+        tbl.Time_best = t;
+    end
+
+    isDT   = varfun(@(x) isa(x,'datetime'), tbl, 'OutputFormat','uniform');
+    dtVars = string(tbl.Properties.VariableNames(isDT));
+    dtVars = setdiff(dtVars, ["Time_best", string(gpsTimeVar)], 'stable');
+
+    if ~isempty(dtVars)
+        fb = tbl.(dtVars(1));
+        if isa(fb,'datetime') && ~isempty(fb.TimeZone), fb.TimeZone = ''; end
+        miss = ismissing(tbl.Time_best);
+        tbl.Time_best(miss) = fb(miss);
     end
 end
