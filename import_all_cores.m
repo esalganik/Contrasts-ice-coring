@@ -2,7 +2,11 @@
 clear; close all; clc
 tStart = tic;
 
-rootFolder = "C:\Users\evsalg001\Documents\MATLAB\Contrasts coring\Data";
+% rootFolder = "C:\Users\evsalg001\Documents\MATLAB\Contrasts coring\Data";
+projectRoot = fileparts(which("import_all_cores.m"));
+if isempty(projectRoot); projectRoot = pwd; end
+rootFolder = fullfile(projectRoot, "Data");
+
 filePatterns = ["*-RHO.xlsx","*-RHO-TXT.xlsx","*-SALO18.xlsx","*-T.xlsx"];
 allFiles = [];
 
@@ -307,6 +311,14 @@ end
 %   T_all_proc.SALO18_out   (ONLY selected columns, preferred order, renamed)
 
 clear; close all; clc
+
+scriptPath = which("import_all_cores.m");
+if isempty(scriptPath)
+    error("Cannot find import_all_cores.m on MATLAB path. Set Current Folder to the script folder or add it to path.");
+end
+scriptDir = fileparts(scriptPath);
+exportFolder = fullfile(scriptDir, "Export");
+if ~isfolder(exportFolder), mkdir(exportFolder); end
 
 MAP = struct();
 
@@ -794,10 +806,17 @@ end
 % 7) Save
 save(OUTFILE_PROCESSED, 'T_all_proc','Tmatch','rho_si_bulk','T_bulk');
 fprintf('Saved processed + formatted data to %s\n', OUTFILE_PROCESSED);
-clearvars -except T_all_proc Tmatch rho_si_bulk T_bulk
+clearvars -except T_all_proc Tmatch rho_si_bulk T_bulk exportFolder
+
+% % Export 3 final tables to one Excel workbook
+% outXlsx = "Coring_data_export.xlsx";
+% writetable(T_all_proc.rho_out,    outXlsx, "Sheet", "RHO",    "WriteMode", "overwritesheet");
+% writetable(T_all_proc.T_out,      outXlsx, "Sheet", "T",      "WriteMode", "overwritesheet");
+% writetable(T_all_proc.SALO18_out, outXlsx, "Sheet", "SALO18", "WriteMode", "overwritesheet");
+% fprintf("Exported to %s (sheets: RHO, T, SALO18)\n", outXlsx);
 
 % Export 3 final tables to one Excel workbook
-outXlsx = "Coring_data_export.xlsx";
+outXlsx = fullfile(exportFolder, "Coring_data_export.xlsx");
 writetable(T_all_proc.rho_out,    outXlsx, "Sheet", "RHO",    "WriteMode", "overwritesheet");
 writetable(T_all_proc.T_out,      outXlsx, "Sheet", "T",      "WriteMode", "overwritesheet");
 writetable(T_all_proc.SALO18_out, outXlsx, "Sheet", "SALO18", "WriteMode", "overwritesheet");
@@ -812,8 +831,18 @@ fprintf("Exported to %s (sheets: RHO, T, SALO18)\n", outXlsx);
 % Settings
 clear; close all; clc
 
+% Locate project folder + Export folder
+scriptPath = which("import_all_cores.m");  % <-- change if needed
+if isempty(scriptPath)
+    error("Cannot find import_all_cores.m on MATLAB path. Set Current Folder to the script folder or add it to path.");
+end
+scriptDir = fileparts(scriptPath);
+exportFolder = fullfile(scriptDir, "Export");
+if ~isfolder(exportFolder), mkdir(exportFolder); end
+
 INFILE = "Coring_data_processed.mat";   % your OUTFILE_PROCESSED
-ncFile = "Contrasts_physical_properties_coring.nc";
+% ncFile = "Contrasts_physical_properties_coring.nc";
+ncFile = fullfile(exportFolder, "Contrasts_physical_properties_coring.nc");
 
 % Load 
 load(INFILE, "T_all_proc");   % <-- one-line load of only T_all_proc
@@ -858,9 +887,142 @@ writeTableGroupNetCDF(ncFile, "/SALO18", T_all_proc.SALO18_out, metaSALO);
 
 fprintf("Exported NetCDF: %s (groups: /RHO, /T, /SALO18)\n", ncFile);
 
-%% import netCDF
-close all; clear; clc; 
-project = 'Contrasts_physical_properties_coring.nc'; ncdisp(project);
+%% ===== Import NetCDF =====
+clear; close all; clc
+
+% Locate project + Export folder
+scriptPath = which("import_all_cores.m");   % adjust if running from another script
+scriptDir  = fileparts(scriptPath);
+
+exportFolder = fullfile(scriptDir, "Export");
+ncFile = fullfile(exportFolder, "Contrasts_physical_properties_coring.nc");
+
+% Inspect structure
+ncdisp(ncFile)
+
+%% NetCDF -> MATLAB tables (RHO, T, SALO18)
+clear; close all; clc
+
+% ---- Locate NetCDF in Export folder (relative to your processing script) ----
+scriptPath = which("import_all_cores.m");   % <-- change if your main script has a different name
+if isempty(scriptPath)
+    error("Cannot find import_all_cores.m on MATLAB path. Set Current Folder to the script folder or add it to path.");
+end
+scriptDir = fileparts(scriptPath);
+
+exportFolder = fullfile(scriptDir, "Export");
+ncFile = fullfile(exportFolder, "Contrasts_physical_properties_coring.nc");
+
+if ~isfile(ncFile)
+    error("NetCDF file not found: %s", ncFile);
+end
+
+% ---- Build tables from each group ----
+T_RHO    = ncGroupToTable(ncFile, "/RHO");
+T_T      = ncGroupToTable(ncFile, "/T");
+T_SALO18 = ncGroupToTable(ncFile, "/SALO18");
+
+% ---- Quick check ----
+fprintf("Loaded tables:\n");
+fprintf("  RHO:    %d rows x %d vars\n", height(T_RHO),    width(T_RHO));
+fprintf("  T:      %d rows x %d vars\n", height(T_T),      width(T_T));
+fprintf("  SALO18: %d rows x %d vars\n", height(T_SALO18), width(T_SALO18));
+
+% ========================= FUNCTIONS =========================
+function T = ncGroupToTable(ncFile, grp)
+ginfo = ncinfo(ncFile, grp);
+
+% Find obs length from group dimensions
+nObs = getDimLength(ginfo, "obs");
+if isempty(nObs)
+    error("Group %s has no 'obs' dimension. Cannot build table.", grp);
+end
+
+T = table();
+Tobs = (1:nObs).'; %#ok<NASGU> % just to make intent clear
+
+for k = 1:numel(ginfo.Variables)
+    vname = string(ginfo.Variables(k).Name);
+
+    % Skip helper variables
+    if vname == "dummy" || startsWith(vname, "strlen_")
+        continue
+    end
+
+    vpath = grp + "/" + vname;
+
+    % Read variable
+    x = ncread(ncFile, vpath);
+
+    % ---- CHAR/string variables ----
+    if ischar(x)
+        s = char(x);
+
+        sz = size(s);
+        if ~any(sz == nObs)
+            warning("Skipping %s%s (char) because no dimension matches obs=%d. Size=%s", ...
+                grp, "/" + vname, nObs, mat2str(sz));
+            continue
+        end
+
+        if sz(1) == nObs
+            svec = string(strtrim(cellstr(s)));
+        else
+            svec = string(strtrim(cellstr(s')));
+        end
+
+        if numel(svec) ~= nObs
+            warning("Skipping %s%s (char->string) because length mismatch: %d vs obs=%d", ...
+                grp, "/" + vname, numel(svec), nObs);
+            continue
+        end
+
+        T.(vname) = svec(:);
+        continue
+    end
+
+    % ---- NUMERIC/LOGICAL variables ----
+    if isnumeric(x) || islogical(x)
+        x = x(:);
+
+        if numel(x) ~= nObs
+            warning("Skipping %s%s because numel=%d != obs=%d (size=%s)", ...
+                grp, "/" + vname, numel(x), nObs, mat2str(size(ncread(ncFile, vpath))));
+            continue
+        end
+
+        units = "";
+        try
+            units = ncreadatt(ncFile, vpath, "units");
+        catch
+        end
+
+        if (ischar(units) || isstring(units)) && contains(lower(string(units)), "days since 1979-01-01")
+            ref = datetime(1979,1,1,0,0,0,"TimeZone","UTC");
+            T.(vname) = ref + days(double(x));
+        else
+            T.(vname) = double(x);
+        end
+
+        continue
+    end
+
+    warning("Skipping %s%s due to unsupported type: %s", grp, "/" + vname, class(x));
+end
+end
+
+function n = getDimLength(ginfo, dimName)
+n = [];
+if ~isfield(ginfo, "Dimensions") || isempty(ginfo.Dimensions)
+    return
+end
+for i = 1:numel(ginfo.Dimensions)
+    if string(ginfo.Dimensions(i).Name) == string(dimName)
+        n = ginfo.Dimensions(i).Length;
+        return
+    end
+end
+end
 
 %% Plot: Per-core avg density vs ice thickness (LAB + IN SITU)
 % clear; close all; clc
