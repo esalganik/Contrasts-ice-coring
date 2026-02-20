@@ -1,5 +1,5 @@
 Dmitry Divine, 	Evgenii Salganik, David Clemens-Sewall, Emiliano Cimoli, Lena Eggers, Keigo Takahashi, and Marcel Nicoalus (2026)
-Sea-ice salinity, temperature, and density from the coring sites during the Contrasts expedition in July-September 2025
+First- and second-year sea-ice salinity, temperature, and density from the coring sites during the Contrasts expedition in July-September 2025
 
 Sea-ice thickness, draft, salinity, temperature, and ice density were measured during near-weekly surveys at the coring site during the CONTRASTS expedition, with four sampling events conducted at three different stations. Ice cores were extracted using a 9-cm (Mark II) internal-diameter ice corer (Kovacs Enterprise, USA). This dataset includes data from 12 coring site visits conducted between 10 July 2025 and 26 August 2025.
 
