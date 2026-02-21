@@ -2,7 +2,6 @@
 clear; close all; clc
 tStart = tic;
 
-% rootFolder = "C:\Users\evsalg001\Documents\MATLAB\Contrasts coring\Data";
 projectRoot = fileparts(which("import_all_cores.m"));
 if isempty(projectRoot); projectRoot = pwd; end
 rootFolder = fullfile(projectRoot, "Data");
@@ -35,7 +34,7 @@ for k = 1:numel(allFiles)
     % ---------------- RHO cores ----------------
     if contains(filePath,'-RHO.xlsx') || contains(filePath,'-RHO-TXT.xlsx')
 
-        % Detect options (same as your original)
+        % Detect options
         try
             opts = detectImportOptions(filePath,'Sheet','Density-densimetry','VariableNamingRule','preserve');
         catch ME
@@ -43,7 +42,7 @@ for k = 1:numel(allFiles)
             continue
         end
 
-        % Your original used columns [1 2 7 8]. Some files (e.g., lead) may have fewer.
+        % Original columns [1 2 7 8].
         nCols = numel(opts.VariableNames);
         if nCols < 3
             warning("Skipping RHO file (too few columns): %s", filePath);
@@ -67,7 +66,7 @@ for k = 1:numel(allFiles)
             continue
         end
 
-        % Convert numeric columns EXACTLY like your original: skip comment column (4)
+        % Convert numeric columns: skip comment column (4)
         varNames = T.Properties.VariableNames;
         for c = 1:numel(varNames)
             if c==4, continue, end
@@ -77,7 +76,7 @@ for k = 1:numel(allFiles)
             end
         end
 
-        % Parse comments EXACTLY like your original
+        % Parse comments
         comments = string(T{:,4});
         rho_all  = str2double(regexp(comments, '(?i)(?<=parafine[^=]*=\s*)[-+]?\d*\.?\d+', 'match','once'));
         Tlab_all = str2double(regexp(comments, '(?i)(?<=lab[^=]*=\s*)[-+]?\d*\.?\d+', 'match','once'));
@@ -94,7 +93,7 @@ for k = 1:numel(allFiles)
         % Keep rows with valid depth
         T = T(~isnan(T{:,1}), :);
 
-        % SALO18 safe import (same as your original)
+        % SALO18 import
         try
             T_salo = readtable(filePath,'Sheet','SALO18','VariableNamingRule','preserve');
             if size(T_salo,2)>=5
@@ -235,7 +234,7 @@ function tbl = add_metadata(tbl,file,name_cells,value_cells,extraMeta)
         tbl.(fn{i}) = repmat(string(extraMeta.(fn{i})),height(tbl),1);
     end
 
-    % StationNumber + StationVisit from Station text like "Station1a"
+    % StationNumber + StationVisit from Station text, e.g. "Station1a"
     if ismember("Station", tbl.Properties.VariableNames)
         stationStr = string(tbl.Station);
         stationNum = str2double(regexp(stationStr, '\d+', 'match', 'once'));
@@ -327,14 +326,14 @@ MAP.EventLabel     = "EventLabel";
 MAP.GPS_Time       = "GPS_Time";
 MAP.GPS_Lat        = "GPS_Lat";
 MAP.GPS_Lon        = "GPS_Lon";
-MAP.Station        = "Station";         % internal only
-MAP.StationNumber  = "StationNumber";   % new
-MAP.StationVisit   = "StationVisit";    % new
+MAP.Station        = "Station";
+MAP.StationNumber  = "StationNumber";
+MAP.StationVisit   = "StationVisit";
 MAP.IceAge         = "IceAge";
 MAP.MeltPond       = "MeltPond";
 MAP.Comments       = "";
 
-% Core counters from import (new)
+% Core counters from import
 MAP.CoreID_RHO     = "CoreID_RHO";
 MAP.CoreID_T       = "CoreID_T";
 MAP.CoreID_SALO18  = "CoreID_SALO18";
@@ -352,16 +351,16 @@ MAP.Vb_export    = "vb_rho_export";
 MAP.Vg_pr        = "vg_pr";
 MAP.Vg           = "vg";
 
-% Geometry (optional, guessed if empty)
+% Geometry
 MAP.IceThickness = "";
 MAP.IceDraft     = "";
 MAP.CoreLength   = "";
 
-% T-core specific (guessed if empty)
+% T-core specific
 MAP.T_Depth      = "";
 MAP.T_Temp       = "";
 
-% SALO18 specific (guessed if empty)
+% SALO18 specific
 MAP.S_Depth1     = "";
 MAP.S_Depth2     = "";
 MAP.S_Salinity   = "";
@@ -527,7 +526,7 @@ for i = 1:nPairs
         end
     end
 
-    % SALO18 fallback if all NaN
+    % SALO18 fallback if no salnity in RHO core
     if all(isnan(Srho))
         SALOcore = [];
         if isfield(T_all,'SALO18') && ~isempty(T_all.SALO18) && ismember(MAP.Station, T_all.SALO18.Properties.VariableNames)
@@ -808,13 +807,6 @@ save(OUTFILE_PROCESSED, 'T_all_proc','Tmatch','rho_si_bulk','T_bulk');
 fprintf('Saved processed + formatted data to %s\n', OUTFILE_PROCESSED);
 clearvars -except T_all_proc Tmatch rho_si_bulk T_bulk exportFolder
 
-% % Export 3 final tables to one Excel workbook
-% outXlsx = "Coring_data_export.xlsx";
-% writetable(T_all_proc.rho_out,    outXlsx, "Sheet", "RHO",    "WriteMode", "overwritesheet");
-% writetable(T_all_proc.T_out,      outXlsx, "Sheet", "T",      "WriteMode", "overwritesheet");
-% writetable(T_all_proc.SALO18_out, outXlsx, "Sheet", "SALO18", "WriteMode", "overwritesheet");
-% fprintf("Exported to %s (sheets: RHO, T, SALO18)\n", outXlsx);
-
 % Export 3 final tables to one Excel workbook
 outXlsx = fullfile(exportFolder, "Coring_data_export.xlsx");
 writetable(T_all_proc.rho_out,    outXlsx, "Sheet", "RHO",    "WriteMode", "overwritesheet");
@@ -841,7 +833,6 @@ exportFolder = fullfile(scriptDir, "Export");
 if ~isfolder(exportFolder), mkdir(exportFolder); end
 
 INFILE = "Coring_data_processed.mat";   % your OUTFILE_PROCESSED
-% ncFile = "Contrasts_physical_properties_coring.nc";
 ncFile = fullfile(exportFolder, "Contrasts_physical_properties_coring.nc");
 
 % Load 
@@ -939,7 +930,7 @@ if isempty(nObs)
 end
 
 T = table();
-Tobs = (1:nObs).'; %#ok<NASGU> % just to make intent clear
+Tobs = (1:nObs).';
 
 for k = 1:numel(ginfo.Variables)
     vname = string(ginfo.Variables(k).Name);
@@ -1025,8 +1016,7 @@ end
 end
 
 %% Plot: Per-core avg density vs ice thickness (LAB + IN SITU)
-% clear; close all; clc
-
+clear; close all; clc
 load("Coring_data_processed.mat","T_all_proc");
 rho = T_all_proc.rho;
 
@@ -1040,7 +1030,7 @@ else
 end
 
 % ---------- Densities ----------
-% Lab density (kg/m^3): prefer rho_lab_kgm3; else column 3 * 1000
+% Lab density (kg/m^3)
 if ismember("rho_lab_kgm3", rho.Properties.VariableNames)
     rhoLab = rho.rho_lab_kgm3;
 else
@@ -1058,7 +1048,6 @@ rhoLab = toNum(rhoLab);
 rhoIns = toNum(rhoIns);
 
 % ---------- Ice thickness ----------
-% Try common metadata names (your import usually creates something like IceThickness or similar)
 thkVar = guessVarName(string(rho.Properties.VariableNames), ...
     ["IceThickness","Ice thickness","thickness","Thick","Ice_thickness","Ice_Thickness"]);
 
@@ -1308,7 +1297,7 @@ end
 ylabel("Ice temperature (°C)");
 title("Temperature vs time");
 
-% ---------- Legend (OLD placement: attached to panel 1, shown above it) ----------
+% ---------- Legend ----------
 hSt = gobjects(0,1);
 labSt = strings(0,1);
 for st = stations'
@@ -1333,8 +1322,10 @@ exportgraphics(gcf,"Density_salinity_temperature_vs_time.png","Resolution",300);
 fprintf("Saved: Density_salinity_temperature_vs_time.png\n");
 
 %% Counter of data sheets
-rootFolder = "C:\Users\evsalg001\Documents\MATLAB\Contrasts coring\Data";
-files = dir(fullfile(rootFolder, '**', '*.xlsx'));
+projectRoot = fileparts(which("import_all_cores.m")); % location of this script
+if isempty(projectRoot); projectRoot = pwd; end
+rootFolder = fullfile(projectRoot, "Data");
+files = dir(fullfile(rootFolder, '**', '*.xlsx')); % file format
 names = string({files.name});
 n_RHO    = sum(contains(names, "-RHO"));
 n_SALO18 = sum(contains(names, "-SALO18"));
