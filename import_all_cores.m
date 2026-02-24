@@ -327,6 +327,40 @@ for c = needCols
         T_all_proc.rho.(cn) = NaN(height(T_all_proc.rho),1);
     end
 end
+if ismember(MAP.Salinity_raw, T_all_proc.rho.Properties.VariableNames)
+    T_all_proc.rho.(MAP.Salinity_used) = toNum(T_all_proc.rho.(MAP.Salinity_raw));
+else
+    T_all_proc.rho.(MAP.Salinity_used) = toNum(T_all_proc.rho{:,7});
+end
+
+SP_est_all = NaN(height(T_all_proc.rho),1);
+hasCond = ismember("cond_mScm",     T_all_proc.rho.Properties.VariableNames);
+hasTemp = ismember("tempC_SALO18",  T_all_proc.rho.Properties.VariableNames);
+
+if hasCond && hasTemp
+    C_mScm = toNum(T_all_proc.rho.cond_mScm);
+    t_C    = toNum(T_all_proc.rho.tempC_SALO18);
+
+    okSP = ~isnan(C_mScm) & ~isnan(t_C);
+    if any(okSP)
+        try
+            SP_est_all(okSP) = gsw_SP_from_C(C_mScm(okSP), t_C(okSP), zeros(nnz(okSP),1));
+        catch ME
+            warning('gsw_SP_from_C failed (global salinity fix): %s', char(ME.message));
+        end
+    end
+
+    % Replace ONLY when measured salinity == 0 and estimate exists
+    Sused = T_all_proc.rho.(MAP.Salinity_used);
+    idxRep = (Sused == 0) & ~isnan(SP_est_all);
+    Sused(idxRep) = SP_est_all(idxRep);
+    T_all_proc.rho.(MAP.Salinity_used) = Sused;
+else
+    warning('Global salinity fix skipped: need cond_mScm and tempC_SALO18 in T_all_proc.rho');
+end
+
+% Keep estimate for debugging (optional)
+T_all_proc.rho.Salinity_est_from_C = SP_est_all;
 
 % Ensure lab density for ALL RHO rows (even if no matching T core)
 T_all_proc.rho.rho_lab_kgm3 = toNum(T_all_proc.rho{:,3}) * 1000;  % assumes col3 = g/cm^3
@@ -560,6 +594,9 @@ depth_SALO = mean(toNum(SALOcore{:,1:2}), 2);
 
     T_all_proc.rho.(MAP.Rho_si)(idxAll)            = rho_si;
     T_all_proc.rho.rho_lab_kgm3(idxAll)            = rho_lab_kgm3;
+    Sprev                                          = T_all_proc.rho.(MAP.Salinity_used)(idxAll);
+    maskKeepPrev                                   = (Srho_used == 0) & ~isnan(Sprev);
+    Srho_used(maskKeepPrev)                        = Sprev(maskKeepPrev);
     T_all_proc.rho.(MAP.Salinity_used)(idxAll)     = Srho_used;
     T_all_proc.rho.(MAP.T_ice)(idxAll)             = T_interp;
 
