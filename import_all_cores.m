@@ -1,4 +1,4 @@
-%% Mass Import of RHO, T, and SALO18 cores with GPS + per-file CoreID + StationNumber/Visit (minimal changes)
+%% Mass Import of RHO, T, and SALO18 cores with GPS + per-file CoreID + StationNumber/Visit
 clear; close all; clc
 tStart = tic;
 
@@ -42,7 +42,6 @@ for k = 1:numel(allFiles)
             continue
         end
 
-        % Original columns [1 2 7 8].
         nCols = numel(opts.VariableNames);
         if nCols < 3
             warning("Skipping RHO file (too few columns): %s", filePath);
@@ -93,23 +92,47 @@ for k = 1:numel(allFiles)
         % Keep rows with valid depth
         T = T(~isnan(T{:,1}), :);
 
-        % SALO18 import
+        % -------- Import SALO18 values from the SAME file --------
+        % Original: salinity from column E (5)
+        % NEW: conductivity from F (6), temperature from G (7)
+        salE = NaN(height(T),1);
+        condF = NaN(height(T),1);
+        tempG = NaN(height(T),1);
+
         try
             T_salo = readtable(filePath,'Sheet','SALO18','VariableNamingRule','preserve');
-            if size(T_salo,2)>=5
-                col5 = T_salo{:,5};
-                if iscell(col5) || isstring(col5)
-                    col5 = str2double(string(col5));
-                end
-                col5 = col5(:);
-                col5 = padOrTrim(col5, height(T));
-            else
-                col5 = NaN(height(T),1);
+
+            % Column E (5): Salinity
+            if size(T_salo,2) >= 5
+                col = T_salo{:,5};
+                if iscell(col) || isstring(col), col = str2double(string(col)); end
+                col = padOrTrim(col(:), height(T));
+                salE = col;
             end
+
+            % Column F (6): Conductivity [mS/cm]
+            if size(T_salo,2) >= 6
+                col = T_salo{:,6};
+                if iscell(col) || isstring(col), col = str2double(string(col)); end
+                col = padOrTrim(col(:), height(T));
+                condF = col;
+            end
+
+            % Column G (7): Sample Temperature [degC]
+            if size(T_salo,2) >= 7
+                col = T_salo{:,7};
+                if iscell(col) || isstring(col), col = str2double(string(col)); end
+                col = padOrTrim(col(:), height(T));
+                tempG = col;
+            end
+
         catch
-            col5 = NaN(height(T),1);
+            % keep NaNs
         end
-        T.salinity = col5;
+
+        T.salinity      = salE;
+        T.cond_mScm     = condF;
+        T.tempC_SALO18  = tempG;
 
         % Add metadata and new columns
         newTbl = add_metadata(T,filePath,{'A7','A8','A10','A2'},{'C7','C8','C10','C2'},extraMeta);
@@ -117,7 +140,7 @@ for k = 1:numel(allFiles)
         % Add GPS (first waypoint)
         [newTbl.GPS_Lat,newTbl.GPS_Lon,newTbl.GPS_Time] = getFirstGPS(filePath,height(newTbl));
 
-        % Per-file core ID (new)
+        % Per-file core ID
         if ~isempty(newTbl)
             rhoCoreCounter = rhoCoreCounter + 1;
             newTbl.CoreID_RHO = repmat(rhoCoreCounter, height(newTbl), 1);
@@ -150,9 +173,17 @@ for k = 1:numel(allFiles)
     % ---------------- SALO18 cores ----------------
     elseif contains(filePath,'-SALO18.xlsx')
 
+        % Import depth1 depth2 salinity + (optional) conductivity + temperature
         try
             opts_S = detectImportOptions(filePath,'Sheet','SALO18','VariableNamingRule','preserve');
-            opts_S.SelectedVariableNames = opts_S.VariableNames([1 2 5]);
+
+            % columns: [1 2 5 6 7] if available
+            nColsS = numel(opts_S.VariableNames);
+            colsWanted = [1 2 5];
+            if nColsS >= 6, colsWanted(end+1) = 6; end
+            if nColsS >= 7, colsWanted(end+1) = 7; end
+
+            opts_S.SelectedVariableNames = opts_S.VariableNames(colsWanted);
             T = readtable(filePath, opts_S);
         catch ME
             warning("Skipping SALO18 file (cannot read SALO18): %s\n  %s", filePath, ME.message);
@@ -161,8 +192,24 @@ for k = 1:numel(allFiles)
 
         T = forceNumericTable(T);
         T = T(~isnan(T{:,1}), :);
+
+        % Normalize names: Salinity always present as 3rd selected col
         if ~isempty(T)
-            T.Salinity = T{:,3}; T(:,3) = [];
+            T.Salinity = T{:,3};
+            T(:,3) = [];
+
+            % If conductivity/temp were selected, store them with clear names
+            if width(T) >= 3
+                % after removing salinity, remaining cols are depth1 depth2 [cond] [temp]
+                if width(T) >= 3
+                    T.Conductivity_mScm = T{:,3};
+                    T(:,3) = [];
+                end
+                if width(T) >= 3
+                    T.TempC = T{:,3};
+                    T(:,3) = [];
+                end
+            end
         end
 
         newTbl = add_metadata(T,filePath,{'A7','A8','A10'},{'C7','C8','C10'},extraMeta);
@@ -184,131 +231,7 @@ save('Coring_data_imported.mat','T_all');
 fprintf('Imported data saved to Coring_data_imported.mat\n');
 clearvars -except T_all
 
-% ---------------- helper functions ----------------
-function T = forceNumericTable(T)
-    vars = T.Properties.VariableNames;
-    for i = 1:numel(vars)
-        v = T.(vars{i});
-        if iscell(v) || isstring(v)
-            T.(vars{i}) = str2double(string(v));
-        end
-    end
-end
-
-function v = padOrTrim(v,n)
-    if numel(v)<n
-        v(end+1:n)=v(end);
-    elseif numel(v)>n
-        v=v(1:n);
-    end
-end
-
-function tbl = add_metadata(tbl,file,name_cells,value_cells,extraMeta)
-    if isempty(tbl), return; end
-
-    % Metadata from sheet
-    for j = 1:numel(name_cells)
-        nm = readcell(file,'Sheet','metadata-core','Range',name_cells{j});
-        varname = matlab.lang.makeValidName(string(nm{1}));
-
-        val = readcell(file,'Sheet','metadata-core','Range',value_cells{j});
-        val = val{1};
-
-        if ischar(val) || isstring(val)
-            tmp = str2double(string(val));
-            if ~isnan(tmp), val = tmp; end
-        end
-        if isnumeric(val) && contains(lower(varname),'date')
-            val = datetime(val,'ConvertFrom','excel');
-        end
-        if isempty(val) || (~isnumeric(val) && ~isdatetime(val))
-            val = NaN;
-        end
-
-        tbl.(varname) = repmat(val,height(tbl),1);
-    end
-
-    % Extra metadata
-    fn = fieldnames(extraMeta);
-    for i = 1:numel(fn)
-        tbl.(fn{i}) = repmat(string(extraMeta.(fn{i})),height(tbl),1);
-    end
-
-    % StationNumber + StationVisit from Station text, e.g. "Station1a"
-    if ismember("Station", tbl.Properties.VariableNames)
-        stationStr = string(tbl.Station);
-        stationNum = str2double(regexp(stationStr, '\d+', 'match', 'once'));
-        stationVisit = regexp(stationStr, '[a-zA-Z]$', 'match', 'once');
-        stationVisit = lower(string(stationVisit));
-        stationVisit(ismissing(stationVisit)) = "";
-        tbl.StationNumber = stationNum;
-        tbl.StationVisit  = stationVisit;
-    else
-        tbl.StationNumber = NaN(height(tbl),1);
-        tbl.StationVisit  = repmat("", height(tbl), 1);
-    end
-
-    % SourceFile
-    [~,fname,ext] = fileparts(file);
-    tbl.SourceFile = repmat(string(strcat(fname, ext)), height(tbl),1);
-
-    % IceAge
-    iceAge = repmat("Unknown", height(tbl),1);
-    if contains(fname,'FYI','IgnoreCase',true), iceAge(:)="FYI";
-    elseif contains(fname,'SMYI','IgnoreCase',true), iceAge(:)="SMYI";
-    elseif contains(fname,'SYI','IgnoreCase',true), iceAge(:)="SYI";
-    end
-    tbl.IceAge = iceAge;
-
-    % Event label
-    expr = "PS\d+.*?(?=-SI_corer)";
-    tokens = regexp(fname, expr, 'match', 'once');
-    if isempty(tokens)
-        tbl.EventLabel = repmat("Unknown", height(tbl), 1);
-    else
-        tbl.EventLabel = repmat(string(tokens), height(tbl), 1);
-    end
-
-    % MeltPond
-    tbl.MeltPond = repmat(contains(fname,'melt_pond','IgnoreCase',true), height(tbl),1);
-end
-
-function [lat,lon,t_gps] = getFirstGPS(coreFile,nRows)
-    lat = nan(nRows,1);
-    lon = nan(nRows,1);
-    t_gps = NaT(nRows,1,'TimeZone','UTC');
-
-    gpsFolder = fullfile(fileparts(coreFile),'GPSdata');
-    if isfolder(gpsFolder)
-        gpsFiles = dir(fullfile(gpsFolder,'Waypoints_*.gpx'));
-        if ~isempty(gpsFiles)
-            gpsFile = fullfile(gpsFiles(1).folder, gpsFiles(1).name);
-            try
-                xDoc = xmlread(gpsFile);
-                wptNodes = xDoc.getElementsByTagName('wpt');
-                if wptNodes.getLength>0
-                    firstNode = wptNodes.item(0);
-                    lat = repmat(str2double(firstNode.getAttribute('lat')), nRows,1);
-                    lon = repmat(str2double(firstNode.getAttribute('lon')), nRows,1);
-                    timeNode = firstNode.getElementsByTagName('time').item(0);
-                    t_gps_val = datetime(char(timeNode.getTextContent),...
-                        'InputFormat','yyyy-MM-dd''T''HH:mm:ss''Z''','TimeZone','UTC');
-                    t_gps = repmat(t_gps_val, nRows,1);
-                end
-            catch
-                warning('Failed to read GPX: %s', coreFile);
-            end
-        end
-    end
-end
-
-%% Load imported -> process -> format/reorder/drop -> rename -> save (filename-key matching incl. lead)
-% Output:
-%   T_all_proc.rho          (original + processed columns)
-%   T_all_proc.rho_out      (ONLY selected columns, preferred order, renamed)
-%   T_all_proc.T_out        (ONLY selected columns, preferred order, renamed)
-%   T_all_proc.SALO18_out   (ONLY selected columns, preferred order, renamed)
-
+%% Load imported -> process -> format/reorder/drop -> rename -> save
 clear; close all; clc
 
 scriptPath = which("import_all_cores.m");
@@ -395,16 +318,18 @@ T_all = ensureNewCols(T_all, MAP);
 T_all_proc = T_all;
 
 % Ensure required processed columns exist in RHO
-needCols = ["rho_si","rho_lab_kgm3","Salinity_used","Temperature_interp", ...
-            "vb_rho_export","vg_pr","vg"];
+needCols = ["rho_si","rho_lab_kgm3", MAP.Salinity_used, "Temperature_interp", ...
+            "vb_rho_export","vg_pr","vg", ...
+            "Salinity_est_from_C"];  % internal only
 for c = needCols
-    if ~ismember(c, T_all_proc.rho.Properties.VariableNames)
-        T_all_proc.rho.(c) = NaN(height(T_all_proc.rho),1);
+    cn = string(c);
+    if ~ismember(cn, string(T_all_proc.rho.Properties.VariableNames))
+        T_all_proc.rho.(cn) = NaN(height(T_all_proc.rho),1);
     end
 end
 
 % Ensure lab density for ALL RHO rows (even if no matching T core)
-T_all_proc.rho.rho_lab_kgm3 = T_all_proc.rho{:,3} * 1000;  % assumes col3 = g/cm^3
+T_all_proc.rho.rho_lab_kgm3 = toNum(T_all_proc.rho{:,3}) * 1000;  % assumes col3 = g/cm^3
 
 % 3) Match T and RHO cores within each folder by:
 %    (a) same Station+Core folder
@@ -413,8 +338,7 @@ T_all_proc.rho.rho_lab_kgm3 = T_all_proc.rho{:,3} * 1000;  % assumes col3 = g/cm
 Tmatch = table(strings(0,1), strings(0,1), strings(0,1), strings(0,1), ...
                'VariableNames', {'Station','Core','T_File','RHO_File'});
 
-% Unique folders (Station+Core) present in T table
-stCol = MAP.Station; % internal
+stCol = MAP.Station;
 coCol = "Core";
 
 if ~ismember(stCol, T_all.T.Properties.VariableNames) || ~ismember(coCol, T_all.T.Properties.VariableNames)
@@ -441,14 +365,12 @@ for f = 1:height(foldersT)
         continue
     end
 
-    % Build descriptor groups for each file (FYI vs FYI-lead etc.) and extract numbers
-    [Tdesc, Tnum]     = arrayfun(@parseCoreDescriptorAndNumber, Tfiles,   'UniformOutput', false);
-    [Rdesc, Rnum]     = arrayfun(@parseCoreDescriptorAndNumber, RHOfiles, 'UniformOutput', false);
+    [Tdesc, Tnum] = arrayfun(@parseCoreDescriptorAndNumber, Tfiles,   'UniformOutput', false);
+    [Rdesc, Rnum] = arrayfun(@parseCoreDescriptorAndNumber, RHOfiles, 'UniformOutput', false);
 
     Tdesc = string(Tdesc);  Tnum = cell2mat(Tnum);
     Rdesc = string(Rdesc);  Rnum = cell2mat(Rnum);
 
-    % For each descriptor group present in T, match to the same descriptor group in RHO
     groups = unique(Tdesc, 'stable');
     for g = 1:numel(groups)
         grp = groups(g);
@@ -461,7 +383,6 @@ for f = 1:height(foldersT)
             continue
         end
 
-        % Sort by the extracted number token
         [~, oT] = sort(Tnum(iT));
         [~, oR] = sort(Rnum(iR));
 
@@ -498,10 +419,10 @@ for i = 1:nPairs
         continue
     end
 
-    depth_rho = mean(T_rho{:,1:2}, 2);
+    depth_rho = mean(toNum(T_rho{:,1:2}), 2);
 
-    depth_T = T_T{:,1};
-    temp    = min(-0.1, T_T{:,2});
+    depth_T = toNum(T_T{:,1});
+    temp    = min(-0.1, toNum(T_T{:,2}));
     ok = ~isnan(depth_T) & ~isnan(temp);
     depth_T = depth_T(ok);
     temp    = temp(ok);
@@ -514,47 +435,73 @@ for i = 1:nPairs
     depth_T_rescaled = depth_T * (max(depth_rho) / max(depth_T));
     T_interp = interp1(depth_T_rescaled, temp, depth_rho, 'linear', 'extrap');
 
-    % Salinity used
+    % -------- Salinity used (measured / fallback / substituted) --------
     if ismember(MAP.Salinity_raw, T_rho.Properties.VariableNames)
-        Srho = T_rho.(MAP.Salinity_raw);
+        Srho = toNum(T_rho.(MAP.Salinity_raw));
     else
         SrhoVar = guessVar(T_rho, ["salinity","S","SALO"], "");
         if SrhoVar ~= ""
-            Srho = T_rho.(SrhoVar);
+            Srho = toNum(T_rho.(SrhoVar));
         else
             Srho = NaN(height(T_rho),1);
         end
     end
 
-    % SALO18 fallback if no salnity in RHO core
+    % SALO18 fallback if no salinity in RHO core (all NaN)
     if all(isnan(Srho))
         SALOcore = [];
         if isfield(T_all,'SALO18') && ~isempty(T_all.SALO18) && ismember(MAP.Station, T_all.SALO18.Properties.VariableNames)
             SALOcore = T_all.SALO18(T_all.SALO18.(MAP.Station) == Tmatch.Station(i), :);
         end
         if ~isempty(SALOcore)
-            depth_SALO = mean(SALOcore{:,1:2}, 2);
-            sal_SALO   = SALOcore{:,3};
-            Srho = interp1(depth_SALO, sal_SALO, depth_rho, 'linear', 'extrap');
+depth_SALO = mean(toNum(SALOcore{:,1:2}), 2);
+ 
+        if ismember("Salinity", SALOcore.Properties.VariableNames)
+            sal_SALO = toNum(SALOcore.Salinity);
+        else
+            sal_SALO = toNum(SALOcore{:,3});
+        end
+
+        Srho = interp1(depth_SALO, sal_SALO, depth_rho, 'linear', 'extrap');
         else
             warning('No SALO18 core found — using NaN for salinity');
         end
     end
 
-    % Lab temperature
+    % Estimate salinity from Conductivity + sample temperature (p=0 dbar)
+    SP_est = NaN(height(T_rho),1);
+    if ismember("cond_mScm", T_rho.Properties.VariableNames) && ismember("tempC_SALO18", T_rho.Properties.VariableNames)
+        C_mScm = toNum(T_rho.cond_mScm);
+        t_C    = toNum(T_rho.tempC_SALO18);
+        okSP = ~isnan(C_mScm) & ~isnan(t_C);
+        if any(okSP)
+            try
+                SP_est(okSP) = gsw_SP_from_C(C_mScm(okSP), t_C(okSP), zeros(nnz(okSP),1));
+            catch ME
+                warning("gsw_SP_from_C failed for %s: %s", Tmatch.RHO_File(i), ME.message);
+            end
+        end
+    end
+
+    % Substitute ONLY when measured salinity == 0 and estimate exists
+    Srho_used = Srho;
+    idxRep = (Srho_used == 0) & ~isnan(SP_est);
+    Srho_used(idxRep) = SP_est(idxRep);
+
+    % -------- Lab temperature --------
     if ismember(MAP.Tlab, T_rho.Properties.VariableNames)
-        T_lab = T_rho.(MAP.Tlab);
+        T_lab = toNum(T_rho.(MAP.Tlab));
     else
         TlabVar = guessVar(T_rho, ["Tlab","lab"], "");
         if TlabVar ~= ""
-            T_lab = T_rho.(TlabVar);
+            T_lab = toNum(T_rho.(TlabVar));
         else
             warning('No lab temperature column found — skipping');
             continue
         end
     end
 
-    rho_meas = T_rho{:,3};
+    rho_meas = toNum(T_rho{:,3});
     rho_lab_kgm3 = rho_meas * 1000;
     rho = rho_lab_kgm3;
 
@@ -562,10 +509,11 @@ for i = 1:nPairs
     % From Cox and Weeks (1983), Lepparanta and Manninen (1988)
     F1_pr_rho = -4.732 - 22.45*T_lab - 0.6397*T_lab.^2 - 0.01074*T_lab.^3;
     F2_pr_rho = 8.903e-2 - 1.763e-2*T_lab - 5.33e-4*T_lab.^2 - 8.801e-6*T_lab.^3;
-    vb_pr_rho = rho .* Srho ./ F1_pr_rho; % Brine volume at laboratory temperature
+    vb_pr_rho = rho .* Srho_used ./ F1_pr_rho; % Brine volume at laboratory temperature
+
     rhoi_pr   = 917 - 0.1403*T_lab; % Pure ice density at laboratory temperature
-    vg_pr     = max(0, 1 - rho .* (F1_pr_rho - rhoi_pr .* Srho/1000 .* F2_pr_rho) ./ (rhoi_pr .* F1_pr_rho)); % Gas volume at laboratory temperature
-    F3_pr     = rhoi_pr .* Srho/1000 ./ (F1_pr_rho - rhoi_pr .* Srho/1000 .* F2_pr_rho);
+    vg_pr     = max(0, 1 - rho .* (F1_pr_rho - rhoi_pr .* Srho_used/1000 .* F2_pr_rho) ./ (rhoi_pr .* F1_pr_rho)); % Gas vol @ lab T
+    F3_pr     = rhoi_pr .* Srho_used/1000 ./ (F1_pr_rho - rhoi_pr .* Srho_used/1000 .* F2_pr_rho);
 
     T_insitu = T_interp; % In situ sea ice temperature
     rhoi_rho = 917 - 0.1403*T_insitu; % Pure ice density at in situ temperature
@@ -580,19 +528,23 @@ for i = 1:nPairs
                    + 1.2291e-4*T_insitu(idx_LM).^2 ...
                    + 1.3603e-4*T_insitu(idx_LM).^3;
 
-    F3_rho = rhoi_rho .* Srho/1000 ./ (F1_rho - rhoi_rho .* Srho/1000 .* F2_rho);
+    F3_rho = rhoi_rho .* Srho_used/1000 ./ (F1_rho - rhoi_rho .* Srho_used/1000 .* F2_rho);
 
     vb_rho_raw = vb_pr_rho .* F1_pr_rho ./ F1_rho / 1000; % Brine volume at in situ temperature
 
     vb_rho_export = vb_rho_raw;
-    vb_rho_export(vb_rho_export > 0.4 | vb_rho_export < 0) = NaN; 
+    vb_rho_export(vb_rho_export > 0.4 | vb_rho_export < 0) = NaN;
 
     vb_rho = vb_rho_raw;
-    vb_rho(vb_rho > 0.4 | vb_rho < 0) = 0.4; % Limits brine volume to 40% for innacurate sea ice temperatures
+    vb_rho(vb_rho > 0.4 | vb_rho < 0) = 0.4; % cap
 
-    vg = max(0, (1 - (1 - vg_pr) .* (rhoi_rho./rhoi_pr) .* (F3_pr.*F1_pr_rho./(F3_rho.*F1_rho))));  % Gas volume at in situ temperature
+    % Robust vg: avoid 0/0 when Srho_used == 0
+    R = (F3_pr.*F1_pr_rho) ./ (F3_rho.*F1_rho);
+    idx0 = (Srho_used == 0);
+    R(idx0) = rhoi_pr(idx0) ./ rhoi_rho(idx0);   % limit Srho->0
+    vg = max(0, 1 - (1 - vg_pr) .* (rhoi_rho./rhoi_pr) .* R);
 
-    rho_si = (1 - vg) .* rhoi_rho .* F1_rho ./ (F1_rho - rhoi_rho .* Srho/1000 .* F2_rho); % Sea ice density at in situ temperature
+    rho_si = (1 - vg) .* rhoi_rho .* F1_rho ./ (F1_rho - rhoi_rho .* Srho_used/1000 .* F2_rho);
     rho_si(isnan(vb_rho)) = NaN;
     % =========================================================
 
@@ -608,16 +560,24 @@ for i = 1:nPairs
 
     T_all_proc.rho.(MAP.Rho_si)(idxAll)            = rho_si;
     T_all_proc.rho.rho_lab_kgm3(idxAll)            = rho_lab_kgm3;
-    T_all_proc.rho.(MAP.Salinity_used)(idxAll)     = Srho;
+    T_all_proc.rho.(MAP.Salinity_used)(idxAll)     = Srho_used;
     T_all_proc.rho.(MAP.T_ice)(idxAll)             = T_interp;
 
     T_all_proc.rho.(MAP.Vb_export)(idxAll)         = vb_rho_export;
     T_all_proc.rho.(MAP.Vg_pr)(idxAll)             = vg_pr;
     T_all_proc.rho.(MAP.Vg)(idxAll)                = vg;
+
+    % internal/debug only
+    T_all_proc.rho.Salinity_est_from_C(idxAll)     = SP_est;
 end
 
 % 5) FORMAT / REORDER / DROP columns for final exports
 rho = T_all_proc.rho;
+
+if ismember(MAP.EventLabel, rho.Properties.VariableNames)
+    rho.(MAP.EventLabel) = string(rho.(MAP.EventLabel));
+end
+
 rho = addTimeBest(rho, MAP.GPS_Time);
 rho = addMeltPond01(rho, MAP.MeltPond);
 
@@ -783,7 +743,7 @@ if isfield(T_all_proc,'SALO18_out')
     T_all_proc.SALO18_out = applyRenameMap(T_all_proc.SALO18_out, renameMap);
 end
 
-% Round calculated export variables to 2 decimals
+% Round calculated export variables to 2 decimals (existing behavior)
 varsToRound_RHO = [
     "Density, ice, technical"
     "Density, ice"
@@ -802,12 +762,20 @@ for k = 1:numel(varsToRound_RHO)
     end
 end
 
-% 7) Save
+% ---- NEW: Round salinity values in export table(s) to 2 decimals ----
+salName = "Sea ice salinity";
+if ismember(salName, T_all_proc.rho_out.Properties.VariableNames) && isnumeric(T_all_proc.rho_out.(salName))
+    T_all_proc.rho_out.(salName) = round(T_all_proc.rho_out.(salName), 2);
+end
+if isfield(T_all_proc,'SALO18_out') && ismember(salName, T_all_proc.SALO18_out.Properties.VariableNames) ...
+        && isnumeric(T_all_proc.SALO18_out.(salName))
+    T_all_proc.SALO18_out.(salName) = round(T_all_proc.SALO18_out.(salName), 2);
+end
+
+% 7) Save + Export
 save(OUTFILE_PROCESSED, 'T_all_proc','Tmatch','rho_si_bulk','T_bulk');
 fprintf('Saved processed + formatted data to %s\n', OUTFILE_PROCESSED);
-clearvars -except T_all_proc Tmatch rho_si_bulk T_bulk exportFolder
 
-% Export 3 final tables to one Excel workbook
 outXlsx = fullfile(exportFolder, "Coring_data_export.xlsx");
 writetable(T_all_proc.rho_out,    outXlsx, "Sheet", "RHO",    "WriteMode", "overwritesheet");
 writetable(T_all_proc.T_out,      outXlsx, "Sheet", "T",      "WriteMode", "overwritesheet");
@@ -817,14 +785,14 @@ fprintf("Exported to %s (sheets: RHO, T, SALO18)\n", outXlsx);
 %% ===== NetCDF export =====
 %  Export Coring tables to NetCDF (with units + comments + categorical attrs)
 %  - Writes one NetCDF4 file with groups: /RHO, /T, /SALO18
-%  - Variable names are sanitized versions of your table headers
+%  - Variable names are sanitized versions of table headers
 %  - Adds units/standard_name/long_name/comment + category/flag metadata
 
 % Settings
 clear; close all; clc
 
 % Locate project folder + Export folder
-scriptPath = which("import_all_cores.m");  % <-- change if needed
+scriptPath = which("import_all_cores.m");
 if isempty(scriptPath)
     error("Cannot find import_all_cores.m on MATLAB path. Set Current Folder to the script folder or add it to path.");
 end
@@ -832,7 +800,7 @@ scriptDir = fileparts(scriptPath);
 exportFolder = fullfile(scriptDir, "Export");
 if ~isfolder(exportFolder), mkdir(exportFolder); end
 
-INFILE = "Coring_data_processed.mat";   % your OUTFILE_PROCESSED
+INFILE = "Coring_data_processed.mat";
 ncFile = fullfile(exportFolder, "Contrasts_physical_properties_coring.nc");
 
 % Load 
@@ -894,8 +862,8 @@ ncdisp(ncFile)
 %% NetCDF -> MATLAB tables (RHO, T, SALO18)
 clear; close all; clc
 
-% ---- Locate NetCDF in Export folder (relative to your processing script) ----
-scriptPath = which("import_all_cores.m");   % <-- change if your main script has a different name
+% ---- Locate NetCDF in Export folder ----
+scriptPath = which("import_all_cores.m");
 if isempty(scriptPath)
     error("Cannot find import_all_cores.m on MATLAB path. Set Current Folder to the script folder or add it to path.");
 end
@@ -1321,20 +1289,127 @@ set(gcf,'Units','inches','Position',[4 4 8 8])
 exportgraphics(gcf,"Density_salinity_temperature_vs_time.png","Resolution",300);
 fprintf("Saved: Density_salinity_temperature_vs_time.png\n");
 
-%% Counter of data sheets
-projectRoot = fileparts(which("import_all_cores.m")); % location of this script
-if isempty(projectRoot); projectRoot = pwd; end
-rootFolder = fullfile(projectRoot, "Data");
-files = dir(fullfile(rootFolder, '**', '*.xlsx')); % file format
-names = string({files.name});
-n_RHO    = sum(contains(names, "-RHO"));
-n_SALO18 = sum(contains(names, "-SALO18"));
-n_T      = sum(contains(names, "-T.xlsx"));
-fprintf('RHO files: %d\n', n_RHO)
-fprintf('SALO18 files: %d\n', n_SALO18)
-fprintf('T files: %d\n', n_T)
+%% ---------------- helper functions ----------------
+function T = forceNumericTable(T)
+    vars = T.Properties.VariableNames;
+    for i = 1:numel(vars)
+        v = T.(vars{i});
+        if iscell(v) || isstring(v)
+            T.(vars{i}) = str2double(string(v));
+        end
+    end
+end
 
-%% =========================== Helpers ===========================
+function v = padOrTrim(v,n)
+    if isempty(v)
+        v = nan(n,1);
+        return
+    end
+    if numel(v)<n
+        v(end+1:n)=v(end);
+    elseif numel(v)>n
+        v=v(1:n);
+    end
+end
+
+function tbl = add_metadata(tbl,file,name_cells,value_cells,extraMeta)
+    if isempty(tbl), return; end
+
+    % Metadata from sheet
+    for j = 1:numel(name_cells)
+        nm = readcell(file,'Sheet','metadata-core','Range',name_cells{j});
+        varname = matlab.lang.makeValidName(string(nm{1}));
+
+        val = readcell(file,'Sheet','metadata-core','Range',value_cells{j});
+        val = val{1};
+
+        if ischar(val) || isstring(val)
+            tmp = str2double(string(val));
+            if ~isnan(tmp), val = tmp; end
+        end
+        if isnumeric(val) && contains(lower(varname),'date')
+            val = datetime(val,'ConvertFrom','excel');
+        end
+        if isempty(val) || (~isnumeric(val) && ~isdatetime(val))
+            val = NaN;
+        end
+
+        tbl.(varname) = repmat(val,height(tbl),1);
+    end
+
+    % Extra metadata
+    fn = fieldnames(extraMeta);
+    for i = 1:numel(fn)
+        tbl.(fn{i}) = repmat(string(extraMeta.(fn{i})),height(tbl),1);
+    end
+
+    % StationNumber + StationVisit from Station text, e.g. "Station1a"
+    if ismember("Station", tbl.Properties.VariableNames)
+        stationStr = string(tbl.Station);
+        stationNum = str2double(regexp(stationStr, '\d+', 'match', 'once'));
+        stationVisit = regexp(stationStr, '[a-zA-Z]$', 'match', 'once');
+        stationVisit = lower(string(stationVisit));
+        stationVisit(ismissing(stationVisit)) = "";
+        tbl.StationNumber = stationNum;
+        tbl.StationVisit  = stationVisit;
+    else
+        tbl.StationNumber = NaN(height(tbl),1);
+        tbl.StationVisit  = repmat("", height(tbl), 1);
+    end
+
+    % SourceFile
+    [~,fname,ext] = fileparts(file);
+    tbl.SourceFile = repmat(string(strcat(fname, ext)), height(tbl),1);
+
+    % IceAge
+    iceAge = repmat("Unknown", height(tbl),1);
+    if contains(fname,'FYI','IgnoreCase',true), iceAge(:)="FYI";
+    elseif contains(fname,'SMYI','IgnoreCase',true), iceAge(:)="SMYI";
+    elseif contains(fname,'SYI','IgnoreCase',true), iceAge(:)="SYI";
+    end
+    tbl.IceAge = iceAge;
+
+    % ---- Event label ----
+    expr = "PS\d+.*?(?=-SI_corer)";
+    tokens = regexp(fname, expr, 'match', 'once');
+    if isempty(tokens)
+        tbl.EventLabel = repmat("Unknown", height(tbl), 1);
+    else
+        tbl.EventLabel = repmat(string(tokens), height(tbl), 1);
+    end
+
+    % MeltPond
+    tbl.MeltPond = repmat(contains(fname,'melt_pond','IgnoreCase',true), height(tbl),1);
+end
+
+function [lat,lon,t_gps] = getFirstGPS(coreFile,nRows)
+    lat = nan(nRows,1);
+    lon = nan(nRows,1);
+    t_gps = NaT(nRows,1,'TimeZone','UTC');
+
+    gpsFolder = fullfile(fileparts(coreFile),'GPSdata');
+    if isfolder(gpsFolder)
+        gpsFiles = dir(fullfile(gpsFolder,'Waypoints_*.gpx'));
+        if ~isempty(gpsFiles)
+            gpsFile = fullfile(gpsFiles(1).folder, gpsFiles(1).name);
+            try
+                xDoc = xmlread(gpsFile);
+                wptNodes = xDoc.getElementsByTagName('wpt');
+                if wptNodes.getLength>0
+                    firstNode = wptNodes.item(0);
+                    lat = repmat(str2double(firstNode.getAttribute('lat')), nRows,1);
+                    lon = repmat(str2double(firstNode.getAttribute('lon')), nRows,1);
+                    timeNode = firstNode.getElementsByTagName('time').item(0);
+                    t_gps_val = datetime(char(timeNode.getTextContent),...
+                        'InputFormat','yyyy-MM-dd''T''HH:mm:ss''Z''','TimeZone','UTC');
+                    t_gps = repmat(t_gps_val, nRows,1);
+                end
+            catch
+                warning('Failed to read GPX: %s', coreFile);
+            end
+        end
+    end
+end
 
 function T_all = ensureNewCols(T_all, MAP)
     if isfield(T_all,'rho') && ~isempty(T_all.rho)
@@ -1342,6 +1417,12 @@ function T_all = ensureNewCols(T_all, MAP)
         if ~ismember(MAP.StationVisit,  T_all.rho.Properties.VariableNames), T_all.rho.(MAP.StationVisit)  = repmat("", height(T_all.rho),1); end
         T_all.rho.(MAP.StationVisit) = string(T_all.rho.(MAP.StationVisit));
         if ~ismember(MAP.CoreID_RHO, T_all.rho.Properties.VariableNames),     T_all.rho.(MAP.CoreID_RHO)     = NaN(height(T_all.rho),1); end
+
+        % Minimal additions needed for salinity substitution (internal use)
+        if ~ismember("cond_mScm", T_all.rho.Properties.VariableNames),         T_all.rho.cond_mScm = NaN(height(T_all.rho),1); end
+        if ~ismember("tempC_SALO18", T_all.rho.Properties.VariableNames),      T_all.rho.tempC_SALO18 = NaN(height(T_all.rho),1); end
+        if ~ismember(MAP.Salinity_used, T_all.rho.Properties.VariableNames),   T_all.rho.(MAP.Salinity_used) = NaN(height(T_all.rho),1); end
+        if ~ismember("Salinity_est_from_C", T_all.rho.Properties.VariableNames), T_all.rho.Salinity_est_from_C = NaN(height(T_all.rho),1); end
     end
     if isfield(T_all,'T') && ~isempty(T_all.T)
         if ~ismember(MAP.StationNumber, T_all.T.Properties.VariableNames),   T_all.T.(MAP.StationNumber) = NaN(height(T_all.T),1); end
@@ -1373,10 +1454,6 @@ function key = filePairKey(sourceFile, kind)
     end
 
     % Remove the numeric token immediately before the ice-age/label chunk.
-    % This fixes 016 vs 019 and 020 vs 022 while keeping "lead" distinction.
-    % Example:
-    %   ...-016-FYI          -> ...-FYI
-    %   ...-022-FYI-lead     -> ...-FYI-lead
     f = regexprep(f, "-\d+(?=-[A-Za-z])", "", "once");
 
     % Clean accidental double dashes
@@ -1482,7 +1559,6 @@ function [desc, num] = parseCoreDescriptorAndNumber(fname)
     end
 
     % descriptor = everything after that number + dash
-    % e.g. "...SI_corer_9cm-020-FYI-lead" -> "FYI-lead"
     tokDesc = regexp(f, "SI_corer_\d+cm-\d+-(.+)$", "tokens", "once");
     if isempty(tokDesc)
         desc = "";
