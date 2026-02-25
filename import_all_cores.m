@@ -93,42 +93,12 @@ for k = 1:numel(allFiles)
         T = T(~isnan(T{:,1}), :);
 
         % -------- Import SALO18 values from the SAME file --------
-        % Original: salinity from column E (5)
-        % NEW: conductivity from F (6), temperature from G (7)
-        salE = NaN(height(T),1);
-        condF = NaN(height(T),1);
-        tempG = NaN(height(T),1);
+        % Always read from fixed top cells and exactly height(T) rows
+        n = height(T);
 
-        try
-            T_salo = readtable(filePath,'Sheet','SALO18','VariableNamingRule','preserve');
-
-            % Column E (5): Salinity
-            if size(T_salo,2) >= 5
-                col = T_salo{:,5};
-                if iscell(col) || isstring(col), col = str2double(string(col)); end
-                col = padOrTrim(col(:), height(T));
-                salE = col;
-            end
-
-            % Column F (6): Conductivity [mS/cm]
-            if size(T_salo,2) >= 6
-                col = T_salo{:,6};
-                if iscell(col) || isstring(col), col = str2double(string(col)); end
-                col = padOrTrim(col(:), height(T));
-                condF = col;
-            end
-
-            % Column G (7): Sample Temperature [degC]
-            if size(T_salo,2) >= 7
-                col = T_salo{:,7};
-                if iscell(col) || isstring(col), col = str2double(string(col)); end
-                col = padOrTrim(col(:), height(T));
-                tempG = col;
-            end
-
-        catch
-            % keep NaNs
-        end
+        salE  = readFixedColumn(filePath, "SALO18", "E", 5, n);
+        condF = readFixedColumn(filePath, "SALO18", "F", 5, n);
+        tempG = readFixedColumn(filePath, "SALO18", "G", 5, n);
 
         T.salinity      = salE;
         T.cond_mScm     = condF;
@@ -137,8 +107,27 @@ for k = 1:numel(allFiles)
         % Add metadata and new columns
         newTbl = add_metadata(T,filePath,{'A7','A8','A10','A2'},{'C7','C8','C10','C2'},extraMeta);
 
-        % Add GPS (first waypoint)
         [newTbl.GPS_Lat,newTbl.GPS_Lon,newTbl.GPS_Time] = getFirstGPS(filePath,height(newTbl));
+
+        % Fallback GPS from metadata-coring if folder GPS is missing
+        missingGPS = all(isnan(newTbl.GPS_Lat)) || all(isnan(newTbl.GPS_Lon)) || all(isnat(newTbl.GPS_Time));
+
+        if missingGPS
+            [lat2, lon2, t2] = getGPSfromMetadataCoring(filePath, height(newTbl));
+            if ~all(isnan(lat2)) && ~all(isnan(lon2)) && ~all(isnat(t2))
+                newTbl.GPS_Lat  = lat2;
+                newTbl.GPS_Lon  = lon2;
+                newTbl.GPS_Time = t2;
+            end
+        end
+
+        % If still no GPS_Time, build it from metadata-core Date + metadata-coring Time (default 09:00)
+        newTbl = fillGPSTimeFromMetaCoreDate(newTbl, filePath);
+
+        % --- Force consistent timezone for table concatenation ---
+        if ismember("GPS_Time", newTbl.Properties.VariableNames) && isdatetime(newTbl.GPS_Time)
+            newTbl.GPS_Time.TimeZone = "UTC";
+        end
 
         % Per-file core ID
         if ~isempty(newTbl)
@@ -163,6 +152,11 @@ for k = 1:numel(allFiles)
 
         newTbl = add_metadata(T,filePath,{'A7','A8','A10'},{'C7','C8','C10'},extraMeta);
         [newTbl.GPS_Lat,newTbl.GPS_Lon,newTbl.GPS_Time] = getFirstGPS(filePath,height(newTbl));
+        newTbl = fillGPSTimeFromMetaCoreDate(newTbl, filePath);
+
+        if ismember("GPS_Time", newTbl.Properties.VariableNames) && isdatetime(newTbl.GPS_Time)
+             newTbl.GPS_Time.TimeZone = "UTC";
+        end
 
         if ~isempty(newTbl)
             tCoreCounter = tCoreCounter + 1;
@@ -214,6 +208,11 @@ for k = 1:numel(allFiles)
 
         newTbl = add_metadata(T,filePath,{'A7','A8','A10'},{'C7','C8','C10'},extraMeta);
         [newTbl.GPS_Lat,newTbl.GPS_Lon,newTbl.GPS_Time] = getFirstGPS(filePath,height(newTbl));
+        newTbl = fillGPSTimeFromMetaCoreDate(newTbl, filePath);
+
+        if ismember("GPS_Time", newTbl.Properties.VariableNames) && isdatetime(newTbl.GPS_Time)
+            newTbl.GPS_Time.TimeZone = "UTC";
+        end
 
         if ~isempty(newTbl)
             saloCoreCounter = saloCoreCounter + 1;
@@ -1419,6 +1418,76 @@ function tbl = add_metadata(tbl,file,name_cells,value_cells,extraMeta)
     tbl.MeltPond = repmat(contains(fname,'melt_pond','IgnoreCase',true), height(tbl),1);
 end
 
+function tbl = fillGPSTimeFromMetaCoreDate(tbl, filePath)
+% If tbl.GPS_Time is missing/NaT, set it to (date from metadata-core columns in tbl)
+% plus (time from metadata-coring!C13), defaulting to 09:00 if time missing.
+
+    if isempty(tbl) || ~ismember("GPS_Time", tbl.Properties.VariableNames)
+        return
+    end
+
+    % only act when GPS_Time is missing
+    if ~isdatetime(tbl.GPS_Time) || ~all(isnat(tbl.GPS_Time))
+        return
+    end
+
+    % --- find a datetime "date" column that add_metadata created ---
+    vn = string(tbl.Properties.VariableNames);
+    isDateName = contains(lower(vn), "date");
+    dateCandidates = vn(isDateName);
+
+    if isempty(dateCandidates)
+        return
+    end
+
+    % pick the first candidate that is datetime and not all NaT
+    d = NaT(height(tbl),1);
+    found = false;
+    for i = 1:numel(dateCandidates)
+        v = tbl.(dateCandidates(i));
+        if isdatetime(v) && ~all(isnat(v))
+            d = v;
+            found = true;
+            break
+        end
+    end
+    if ~found
+        return
+    end
+
+    % normalize date to start-of-day
+    d0 = dateshift(d, "start", "day");
+
+    % --- read time from metadata-coring C13 (Excel fraction-of-day or text) ---
+    tod = hours(9); % default 09:00
+    try
+        tRaw = readcell(filePath, "Sheet","metadata-coring", "Range","C13"); 
+        tRaw = tRaw{1};
+
+        if isnumeric(tRaw) && isscalar(tRaw) && ~isnan(tRaw)
+            tod = seconds(tRaw * 24 * 3600);   % duration
+        else
+            ts = strtrim(string(tRaw));
+            if strlength(ts) > 0
+                try
+                    tod = duration(ts, "InputFormat","hh:mm");
+                catch
+                    try
+                        tod = duration(ts, "InputFormat","hh:mm:ss");
+                    catch
+                        tod = hours(9);
+                    end
+                end
+            end
+        end
+    catch
+        % keep default 09:00
+    end
+
+    % IMPORTANT: add duration (not numeric seconds)
+    tbl.GPS_Time = d0 + tod;
+end
+
 function [lat,lon,t_gps] = getFirstGPS(coreFile,nRows)
     lat = nan(nRows,1);
     lon = nan(nRows,1);
@@ -1632,6 +1701,112 @@ end
 function y = earliestNonMissing(x)
     x = x(~ismissing(x));
     if isempty(x), y = NaT; else, y = min(x); end
+end
+
+function v = readFixedColumn(xlsxFile, sheetName, colLetter, startRow, nRows)
+
+    v = NaN(nRows,1);
+
+    lastRow = startRow + nRows - 1;
+    range = sprintf('%s%d:%s%d', colLetter, startRow, colLetter, lastRow);
+
+    try
+        raw = readcell(xlsxFile, "Sheet", sheetName, "Range", range);
+    catch
+        return
+    end
+
+    raw = raw(:);
+    tmp = NaN(numel(raw),1);
+
+    for i = 1:numel(raw)
+        if isnumeric(raw{i}) && isscalar(raw{i})
+            tmp(i) = raw{i};
+        else
+            tmp(i) = str2double(string(raw{i}));
+        end
+    end
+
+    tmp = tmp(:);
+    if numel(tmp) < nRows
+        tmp(end+1:nRows,1) = NaN;
+    elseif numel(tmp) > nRows
+        tmp = tmp(1:nRows);
+    end
+v = tmp;
+end
+
+function [latVec, lonVec, timeVec] = getGPSfromMetadataCoring(filePath, nRows)
+% Fallback GPS reader:
+% Sheet:  metadata-coring
+% lat:    C8
+% lon:    C9
+% date:   C12 (often datetime already)
+% time:   C13 (often Excel fractional day, e.g., 0.6875 = 16:30)
+
+    latVec  = NaN(nRows,1);
+    lonVec  = NaN(nRows,1);
+    timeVec = NaT(nRows,1);
+
+    try
+        lat0 = readcell(filePath, "Sheet","metadata-coring", "Range","C8");  lat0 = lat0{1};
+        lon0 = readcell(filePath, "Sheet","metadata-coring", "Range","C9");  lon0 = lon0{1};
+        dRaw = readcell(filePath, "Sheet","metadata-coring", "Range","C12"); dRaw = dRaw{1};
+        tRaw = readcell(filePath, "Sheet","metadata-coring", "Range","C13"); tRaw = tRaw{1};
+    catch
+        return
+    end
+
+    % --- lat/lon (allow comma decimals) ---
+    lat0 = str2double(strrep(strtrim(string(lat0)), ",", "."));
+    lon0 = str2double(strrep(strtrim(string(lon0)), ",", "."));
+    if isnan(lat0) || isnan(lon0)
+        return
+    end
+
+    % --- date ---
+    if isdatetime(dRaw)
+        d = dateshift(dRaw, "start", "day");
+    elseif isnumeric(dRaw) && isscalar(dRaw) && ~isnan(dRaw)
+        d = dateshift(datetime(dRaw, "ConvertFrom","excel"), "start", "day");
+    else
+        ds = strtrim(string(dRaw));
+        if strlength(ds)==0, return, end
+        try
+            d = dateshift(datetime(ds, "InputFormat","yyyy-MM-dd"), "start", "day");
+        catch
+            try
+                d = dateshift(datetime(ds), "start", "day");
+            catch
+                return
+            end
+        end
+    end
+
+    % --- time ---
+    if isnumeric(tRaw) && isscalar(tRaw) && ~isnan(tRaw)
+        % Excel fractional day (0.6875 = 16:30)
+        tod = seconds(tRaw * 24 * 3600);   % <-- duration
+    else
+        ts = strtrim(string(tRaw));
+        if strlength(ts)==0, return, end
+        try
+            tod = duration(ts, "InputFormat","hh:mm");       % duration
+        catch
+            try
+                tod = duration(ts, "InputFormat","hh:mm:ss"); % duration
+            catch
+                return
+            end
+        end
+    end
+
+    % IMPORTANT: add duration to datetime (NOT numeric seconds!)
+    t0 = d + tod;
+
+    latVec  = repmat(lat0, nRows, 1);
+    lonVec  = repmat(lon0, nRows, 1);
+    timeVec = repmat(t0,  nRows, 1);
 end
 
 %% FUNCTION: Write one table into a NetCDF group
