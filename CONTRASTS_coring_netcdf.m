@@ -1,4 +1,4 @@
-%% ===== NetCDF export (PROCESS SCRIPT ADD-ON) =====
+%% ===== NetCDF export =====
 % Exports Coring tables to NetCDF (with units + comments + categorical attrs)
 % - One NetCDF4 file with groups: /RHO, /T, /SALO18
 % - Variable names are sanitized versions of table headers
@@ -205,7 +205,6 @@ M("Melt pond") = struct("standard_name","melt_pond","units","1","comment","Sea i
 M("Ice station visit") = struct("standard_name","station_visit","units","1","comment","Visits a, b, c, d.");
 M("Ice station number") = struct("standard_name","station_number","units","1","comment","Ice stations 1, 2, 3.");
 
-% If your output headers are exactly these after rename:
 M("Core length") = struct("standard_name","core_length","units","m");
 M("Depth, ice/snow") = struct("standard_name","depth","units","m");
 M("Depth, ice/snow, top/minimum")    = struct("standard_name","depth","units","m");

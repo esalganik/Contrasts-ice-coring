@@ -41,7 +41,6 @@ Traw = readtable(filePath, ...
     "ReadVariableNames", true, ...
     "VariableNamingRule","preserve", 'UseExcel', false);
 
-% Keep only the columns you used before: [1 2 7 8]
 nCols = width(Traw);
 cDepth1 = 1;
 cDepth2 = 2;
@@ -243,7 +242,6 @@ end
 end
 
 function tbl = add_metadata_fast(tbl,file,name_cells,value_cells,extraMeta)
-% Same outputs as your add_metadata, but reads metadata-core ONCE.
 
 if isempty(tbl), return; end
 

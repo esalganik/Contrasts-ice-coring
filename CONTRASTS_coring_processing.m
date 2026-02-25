@@ -1,8 +1,4 @@
 %% PROCESS ONLY: load imported -> process -> format/reorder -> rename -> round -> export
-% Fixes:
-% 1) Always uses Depth1 / Depth2 from the import (so no "REFERENCE"/"zero vertical" in export)
-% 2) Removes any guessed "comments" column (since your import has no comments)
-%
 % Requires: Coring_data_imported.mat (contains T_all)
 % Output:   Coring_data_processed.mat + Export/Coring_data_export.xlsx
 
@@ -60,7 +56,7 @@ MAP.Vg           = "vg";
 load(INFILE_IMPORTED, "T_all");
 fprintf("Loaded imported data: %s\n", INFILE_IMPORTED);
 
-% Normalize types (same as yours)
+% Normalize types
 if isfield(T_all,'T') && ~isempty(T_all.T)
     T_all.T.SourceFile   = string(T_all.T.SourceFile);
     if ismember(MAP.Station, T_all.T.Properties.VariableNames), T_all.T.(MAP.Station) = string(T_all.T.(MAP.Station)); end
@@ -128,10 +124,10 @@ else
     warning('Global salinity fix skipped: need cond_mScm and tempC_SALO18 in T_all_proc.rho');
 end
 
-% Keep estimate (optional/debug)
+% Keep estimate
 T_all_proc.rho.Salinity_est_from_C = SP_est_all;
 
-% Lab density for ALL rows (expects your import created Density_gcm3)
+% Lab density for ALL rows
 if ismember("Density_gcm3", T_all_proc.rho.Properties.VariableNames)
     T_all_proc.rho.rho_lab_kgm3 = toNum(T_all_proc.rho.Density_gcm3) * 1000;
 else
@@ -531,11 +527,8 @@ renameMap = {
     "MeltPond01",          "Melt pond"
     "IceAge",              "Ice age"
     "CoreLength",          "Core length"
-
-    % IMPORTANT: your Depth1/Depth2 should end up as these:
     "Depth1",              "Depth, ice/snow, top/minimum"
     "Depth2",              "Depth, ice/snow, bottom/maximum"
-
     "Salinity",            "Sea ice salinity"
 };
 
