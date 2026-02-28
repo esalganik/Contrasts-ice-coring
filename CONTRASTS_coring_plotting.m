@@ -205,6 +205,99 @@ set(gcf,'Units','inches','Position',[4 4 8 8])
 exportgraphics(gcf,"Density_salinity_temperature_vs_time.png","Resolution",300);
 fprintf("Saved: Density_salinity_temperature_vs_time.png\n");
 
+%% NetCDF import
+clear; clc; close all;
+filename = fullfile(pwd, 'Export', 'Contrasts_physical_properties_coring.nc');
+% ncdisp(filename)
+date_time_raw = ncread(filename, '/RHO/DATE_TIME');
+temperature = ncread(filename, '/RHO/Temperature_ice_snow');
+Core_number_RHO = ncread(filename, '/RHO/Core_number_RHO');
+Station = ncread(filename, '/RHO/Ice_station_number');
+Melt_pond = ncread(filename, '/RHO/Melt_pond');
+IceThickness = ncread(filename, '/RHO/Sea_ice_thickness');
+info = ncinfo(filename, '/RHO/DATE_TIME');
+units = ncreadatt(filename, '/RHO/DATE_TIME', 'units');
+refDate = datetime(extractAfter(units, 'since '), 'InputFormat','yyyy-MM-dd HH:mm:ss');
+date_time = refDate + days(date_time_raw);
+T = table(Core_number_RHO, Station, date_time, temperature, Melt_pond,IceThickness);
+T = sortrows(T, {'Core_number_RHO','date_time'});
+[~, ~, idx] = unique(T.Core_number_RHO);
+T_bot = accumarray(idx, T.temperature, [], @(x) x(end));
+% Handle datetime via datenum trick
+tNum = datenum(T.date_time);
+time_bot_num = accumarray(idx, tNum, [], @(x) x(end));
+time_bot = datetime(time_bot_num, 'ConvertFrom','datenum');
+% Get station of each core (last entry per core)
+station_bot = accumarray(idx, T.Station, [], @(x) x(end));
+Melt_pond_bot = accumarray(idx, T.Melt_pond, [], @(x) x(end));
+IceThickness_bot = accumarray(idx, T.IceThickness, [], @(x) x(end));
+
+figure
+tiledlayout(2,1)
+
+stations_unique = unique(station_bot);
+colors = lines(length(stations_unique));
+
+markerTypes = {'o','^'};   % 0 = no melt pond, 1 = melt pond
+
+% Panel 1: Temp vs Time
+nexttile
+hold on; box on;
+legendHandles = [];
+for k = 1:length(stations_unique)
+    for mp = 0:1
+
+        ind = station_bot == stations_unique(k) & ...
+              Melt_pond_bot == mp;
+
+        if any(ind)
+
+            h = plot(time_bot(ind), T_bot(ind), ...
+                markerTypes{mp+1}, ...
+                'LineStyle','none', ...
+                'Color', colors(k,:), ...
+                'MarkerFaceColor', colors(k,:));
+
+            % Only create legend entry once per station
+            if mp == 0
+                legendHandles(k) = h;
+            end
+        end
+    end
+end
+
+ylabel('Bottom Temperature')
+title('Bottom Temperature vs Time')
+grid on
+
+% Panel 2: Temp vs Ice Thickness
+nexttile
+hold on; box on;
+for k = 1:length(stations_unique)
+    for mp = 0:1
+
+        ind = station_bot == stations_unique(k) & ...
+              Melt_pond_bot == mp;
+
+        if any(ind)
+            plot(T_bot(ind),IceThickness_bot(ind), ...
+                markerTypes{mp+1}, ...
+                'LineStyle','none', ...
+                'Color', colors(k,:), ...
+                'MarkerFaceColor', colors(k,:));
+        end
+    end
+end
+
+xlabel('Bottom Temperature')
+ylabel('Ice Thickness')
+title('Bottom Temperature vs Ice Thickness')
+grid on
+
+legend(legendHandles, ...
+       "Station " + string(stations_unique), ...
+       'Location','northoutside','numcolumns',3,'box','off')
+
 %% Functions
 function x = toNum(x)
     if iscell(x) || isstring(x)

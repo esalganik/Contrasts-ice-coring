@@ -110,7 +110,8 @@ if hasCond && hasTemp
     okSP = ~isnan(C_mScm) & ~isnan(t_C);
     if any(okSP)
         try
-            SP_est_all(okSP) = gsw_SP_from_C(C_mScm(okSP), t_C(okSP), zeros(nnz(okSP),1));
+            % SP_est_all(okSP) = gsw_SP_from_C(C_mScm(okSP), t_C(okSP), zeros(nnz(okSP),1));
+            SP_est_all(okSP) = gsw_SP_from_C(C_mScm(okSP), 25, zeros(nnz(okSP),1));
         catch ME
             warning('gsw_SP_from_C failed (global salinity fix): %s', char(ME.message));
         end
@@ -272,7 +273,8 @@ for i = 1:nPairs
         okSP = ~isnan(C_mScm) & ~isnan(t_C);
         if any(okSP)
             try
-                SP_est(okSP) = gsw_SP_from_C(C_mScm(okSP), t_C(okSP), zeros(nnz(okSP),1));
+                % SP_est(okSP) = gsw_SP_from_C(C_mScm(okSP), t_C(okSP), zeros(nnz(okSP),1));
+                SP_est(okSP) = gsw_SP_from_C(C_mScm(okSP), 25, zeros(nnz(okSP),1));
             catch ME
                 warning("gsw_SP_from_C failed for %s: %s", Tmatch.RHO_File(i), ME.message);
             end
@@ -514,6 +516,9 @@ renameMap = {
     "CoreID_SALO18",       "Core number (SALO18)"
     "StationNumber",       "Ice station number"
     "StationVisit",        "Ice station visit"
+    "depth center",        "Depth, ice/snow"
+    "IceThickness",        "Sea ice thickness"
+    "Draft",               "Sea ice draft"
 
     "rho_lab_kgm3",        "Density, ice, technical"
     "rho_si",              "Density, ice"
