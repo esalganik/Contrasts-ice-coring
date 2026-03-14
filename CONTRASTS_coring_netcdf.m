@@ -121,22 +121,22 @@ for i = 1:numel(vars)
         x = x(:);
         nccreate(ncFile, vpath, "Dimensions", {obsDim, nObs}, "Datatype", "double");
         ncwrite(ncFile, vpath, double(x));
-else
-    s = string(x);
-    s(ismissing(s)) = "";
-    maxLen = max(strlength(s));
-    if maxLen < 1, maxLen = 1; end
+    else
+        s = string(x);
+        s(ismissing(s)) = "";
+        maxLen = max(strlength(s));
+        if maxLen < 1, maxLen = 1; end
 
-    strlenDim = "strlen_" + string(ncName);
+        strlenDim = "strlen_" + string(ncName);
 
-    nccreate(ncFile, vpath, ...
-        "Dimensions", {char(strlenDim), maxLen, char(obsDim), nObs}, ...
-        "Datatype", "char");
+        nccreate(ncFile, vpath, ...
+            "Dimensions", {char(strlenDim), maxLen, char(obsDim), nObs}, ...
+            "Datatype", "char");
 
-    C = char(pad(s, maxLen));   % nObs x maxLen
-    C = permute(C, [2 1]);      % maxLen x nObs  (strlen x obs)
-    ncwrite(ncFile, vpath, C);
-end
+        C = char(pad(s, maxLen));   % nObs x maxLen
+        C = permute(C, [2 1]);      % maxLen x nObs  (strlen x obs)
+        ncwrite(ncFile, vpath, C);
+    end
 
     % Default long_name = table header
     ncwriteatt(ncFile, vpath, "long_name", char(origName));
@@ -221,6 +221,7 @@ M = containers.Map();
 M("DATE/TIME")  = struct("standard_name","time","units","days since 1979-01-01 00:00:00");
 M("LATITUDE")   = struct("standard_name","latitude","units","degree_north","comment","Coordinates of the ice coring site at the time of sampling");
 M("LONGITUDE")  = struct("standard_name","longitude","units","degree_east","comment","Coordinates of the ice coring site at the time of sampling");
+M("Snow height") = struct("standard_name","Snow_thickness","units","m","comment","Average snow or Surface Scattering Layer depth at coring site");
 
 M("Ice age") = struct("standard_name","ice_age","comment","First-year ice (FYI), second-year ice (SYI), (second- or multiyear ice) SMYI.");
 M("Melt pond") = struct("standard_name","melt_pond","units","1","comment","Sea ice covered (1) or not covered (0) with melt pond.");
@@ -228,10 +229,10 @@ M("Ice station visit") = struct("standard_name","station_visit","units","1","com
 M("Ice station number") = struct("standard_name","station_number","units","1","comment","Ice stations 1, 2, 3.");
 
 M("Sea_ice_thickness") = struct("standard_name","sea_ice_thickness","units","m","comment","Distance from the top of ice to the bottom of the ice");
-M("Sea_ice_draft")        = struct("standard_name","sea_ice_draft","units","m","comment","Distance from water level to bottom of the ice");
-M("Core length")   = struct("standard_name","core_length","units","m","comment","Total length of the extracted ice core");
+M("Sea_ice_draft") = struct("standard_name","sea_ice_draft","units","m","comment","Distance from water level to bottom of the ice");
+M("Core length") = struct("standard_name","core_length","units","m","comment","Total length of the extracted ice core");
 M("Depth, ice/snow") = struct("standard_name","depth","units","m","comment","Middle of ice layer sampled, measured from the ice surface");
-M("Depth, ice/snow, top/minimum")    = struct("standard_name","depth","units","m","comment","Top of ice layer sampled, measured from the ice surface");
+M("Depth, ice/snow, top/minimum") = struct("standard_name","depth","units","m","comment","Top of ice layer sampled, measured from the ice surface");
 M("Depth, ice/snow, bottom/maximum") = struct("standard_name","depth","units","m","comment","Bottom of ice layer sampled, measured from the ice surface");
 
 M("Sea ice salinity") = struct("standard_name","sea_ice_salinity","units","1","comment","Practical salinity measured after melting");
@@ -252,15 +253,16 @@ M = containers.Map();
 M("DATE/TIME")  = struct("standard_name","time","units","days since 1979-01-01 00:00:00");
 M("LATITUDE")   = struct("standard_name","latitude","units","degree_north","comment","Coordinates of the ice coring site at the time of sampling");
 M("LONGITUDE")  = struct("standard_name","longitude","units","degree_east","comment","Coordinates of the ice coring site at the time of sampling");
+M("Snow height") = struct("standard_name","Snow_thickness","units","m","comment","Average snow or Surface Scattering Layer depth at coring site");
 M("Sea_ice_thickness") = struct("standard_name","sea_ice_thickness","units","m","comment","Distance from the top of ice to the bottom of the ice");
-M("Sea_ice_draft")        = struct("standard_name","sea_ice_draft","units","m","comment","Distance from water level to bottom of the ice");
+M("Sea_ice_draft") = struct("standard_name","sea_ice_draft","units","m","comment","Distance from water level to bottom of the ice");
 
 M("Ice age") = struct("standard_name","ice_age","comment","First-year ice (FYI), second-year ice (SYI), (second- or multiyear ice) SMYI.");
 M("Melt pond") = struct("standard_name","melt_pond","units","1","comment","Sea ice covered (1) or not covered (0) with melt pond.");
 M("Ice station visit") = struct("standard_name","station_visit","units","1","comment","Visits a, b, c, d.");
 M("Ice station number") = struct("standard_name","station_number","units","1","comment","Ice stations 1, 2, 3.");
 
-M("Core length")   = struct("standard_name","core_length","units","m","comment","Total length of the extracted ice core");
+M("Core length") = struct("standard_name","core_length","units","m","comment","Total length of the extracted ice core");
 M("Depth, ice/snow") = struct("standard_name","depth","units","m","comment","Middle of ice layer sampled, measured from the ice surface");
 M("Temperature, ice/snow") = struct("standard_name","sea_ice_temperature","units","degree_Celsius","comment","In situ ice temperature.");
 end
@@ -271,16 +273,17 @@ M = containers.Map();
 M("DATE/TIME")  = struct("standard_name","time","units","days since 1979-01-01 00:00:00");
 M("LATITUDE")   = struct("standard_name","latitude","units","degree_north","comment","Coordinates of the ice coring site at the time of sampling");
 M("LONGITUDE")  = struct("standard_name","longitude","units","degree_east","comment","Coordinates of the ice coring site at the time of sampling");
+M("Snow height") = struct("standard_name","Snow_thickness","units","m","comment","Average snow or Surface Scattering Layer depth at coring site");
 M("Sea_ice_thickness") = struct("standard_name","sea_ice_thickness","units","m","comment","Distance from the top of ice to the bottom of the ice");
-M("Sea_ice_draft")        = struct("standard_name","sea_ice_draft","units","m","comment","Distance from water level to bottom of the ice");
+M("Sea_ice_draft") = struct("standard_name","sea_ice_draft","units","m","comment","Distance from water level to bottom of the ice");
 
 M("Ice age") = struct("standard_name","ice_age","comment","First-year ice (FYI), second-year ice (SYI), (second- or multiyear ice) SMYI.");
 M("Melt pond") = struct("standard_name","melt_pond","units","1","comment","Sea ice covered (1) or not covered (0) with melt pond.");
 M("Ice station visit") = struct("standard_name","station_visit","units","1","comment","Visits a, b, c, d.");
 M("Ice station number") = struct("standard_name","station_number","units","1","comment","Ice stations 1, 2, 3.");
 
-M("Core length")   = struct("standard_name","core_length","units","m","comment","Total length of the extracted ice core");
-M("Depth, ice/snow, top/minimum")    = struct("standard_name","depth","units","m","comment","Top of ice layer sampled, measured from the ice surface");
+M("Core length") = struct("standard_name","core_length","units","m","comment","Total length of the extracted ice core");
+M("Depth, ice/snow, top/minimum") = struct("standard_name","depth","units","m","comment","Top of ice layer sampled, measured from the ice surface");
 M("Depth, ice/snow, bottom/maximum") = struct("standard_name","depth","units","m","comment","Bottom of ice layer sampled, measured from the ice surface");
 M("Sea ice salinity") = struct("standard_name","sea_ice_salinity","units","1","comment","Practical salinity measured after melting");
 end

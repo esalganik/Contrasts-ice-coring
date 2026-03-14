@@ -215,6 +215,7 @@ Core_number_RHO = ncread(filename, '/RHO/Core_number_RHO');
 Station = ncread(filename, '/RHO/Ice_station_number');
 Melt_pond = ncread(filename, '/RHO/Melt_pond');
 IceThickness = ncread(filename, '/RHO/Sea_ice_thickness');
+Depth = ncread(filename, '/RHO/Depth_ice_snow_top_minimum');
 info = ncinfo(filename, '/RHO/DATE_TIME');
 units = ncreadatt(filename, '/RHO/DATE_TIME', 'units');
 refDate = datetime(extractAfter(units, 'since '), 'InputFormat','yyyy-MM-dd HH:mm:ss');
@@ -233,70 +234,288 @@ Melt_pond_bot = accumarray(idx, T.Melt_pond, [], @(x) x(end));
 IceThickness_bot = accumarray(idx, T.IceThickness, [], @(x) x(end));
 
 figure
-tiledlayout(2,1)
-
 stations_unique = unique(station_bot);
-colors = lines(length(stations_unique));
 
-markerTypes = {'o','^'};   % 0 = no melt pond, 1 = melt pond
+% marker types for stations
+markerTypes = {'o','^','s','d','v','>','<','p','h'};
+markerTypes = markerTypes(1:length(stations_unique));
 
-% Panel 1: Temp vs Time
-nexttile
+% colormap for ice thickness
+load("lipari.mat")
+cmap = lipari;
+colormap(cmap)
+
+% normalize thickness for coloring
+th_min = min(IceThickness_bot);
+th_max = max(IceThickness_bot);
+
 hold on; box on;
-legendHandles = [];
 for k = 1:length(stations_unique)
-    for mp = 0:1
 
-        ind = station_bot == stations_unique(k) & ...
-              Melt_pond_bot == mp;
+    ind = station_bot == stations_unique(k);
 
-        if any(ind)
+    if any(ind)
 
-            h = plot(time_bot(ind), T_bot(ind), ...
-                markerTypes{mp+1}, ...
-                'LineStyle','none', ...
-                'Color', colors(k,:), ...
-                'MarkerFaceColor', colors(k,:));
+        scatter(time_bot(ind), T_bot(ind), ...
+            60, IceThickness_bot(ind), ...
+            markerTypes{k}, ...
+            'filled');
 
-            % Only create legend entry once per station
-            if mp == 0
-                legendHandles(k) = h;
-            end
-        end
     end
 end
 
 ylabel('Bottom Temperature')
 title('Bottom Temperature vs Time')
 grid on
+colorbar
+clim([th_min th_max])
 
-% Panel 2: Temp vs Ice Thickness
-nexttile
-hold on; box on;
-for k = 1:length(stations_unique)
-    for mp = 0:1
+legend("Station " + string(stations_unique), ...
+       'Location','northoutside','numcolumns',3,'box','off')
 
-        ind = station_bot == stations_unique(k) & ...
-              Melt_pond_bot == mp;
+%% NetCDF import + profile plotting (3 panels by Station)
+% Depth vs Temperature for each core
+% Color = colormap (e.g., batlow/lipari)
+% LineStyle = Visit (a,b,c,d)
+clear; clc; close all;
 
-        if any(ind)
-            plot(T_bot(ind),IceThickness_bot(ind), ...
-                markerTypes{mp+1}, ...
-                'LineStyle','none', ...
-                'Color', colors(k,:), ...
-                'MarkerFaceColor', colors(k,:));
+filename = fullfile(pwd, 'Export', 'Contrasts_physical_properties_coring.nc');
+
+% --- Read NetCDF variables
+date_time_raw    = ncread(filename, '/RHO/DATE_TIME');
+temperature      = ncread(filename, '/RHO/Temperature_ice_snow');
+Core_number_RHO  = ncread(filename, '/RHO/Core_number_RHO');
+Station          = ncread(filename, '/RHO/Ice_station_number');
+Visit            = ncread(filename, '/RHO/Ice_station_visit');   % a,b,c,d (often char)
+Depth            = ncread(filename, '/RHO/Depth_ice_snow_top_minimum');
+
+units   = ncreadatt(filename, '/RHO/DATE_TIME', 'units');
+refDate = datetime(extractAfter(units, 'since '), 'InputFormat','yyyy-MM-dd HH:mm:ss');
+date_time = refDate + days(date_time_raw);
+
+% --- Make Visit a string vector
+Visit = lower(strtrim(string(Visit(:))));   % e.g. "a","b","c","d"
+
+% Load colormap from MAT (example: batlow.mat contains variable "batlow")
+% If you want lipari instead:
+%   load("lipari.mat","lipari"); cmap = squeeze(lipari);
+load("batlow.mat","batlow")
+cmap = squeeze(batlow);          % ensure Nx3
+if size(cmap,2) ~= 3
+    error('Colormap in MAT must be Nx3.');
+end
+
+% Build long table for profiles
+Tfull = table(Core_number_RHO(:), Station(:), Visit(:), date_time(:), temperature(:), Depth(:), ...
+    'VariableNames', {'Core_number_RHO','Station','Visit','date_time','temperature','Depth'});
+
+% Remove invalid rows
+good = isfinite(Tfull.Core_number_RHO) & isfinite(Tfull.Station) & isfinite(Tfull.temperature) & isfinite(Tfull.Depth);
+Tfull = Tfull(good,:);
+
+% Sort so "end" corresponds to last time per core (same as your bottom-temp approach)
+Tfull = sortrows(Tfull, {'Core_number_RHO','date_time'});
+
+% Per-core indexing
+[core_list, ~, idxC] = unique(Tfull.Core_number_RHO);
+
+% Station per core (last)
+station_core = accumarray(idxC, Tfull.Station, [], @(x) x(end));
+
+% Date per core (last)
+date_core_num = accumarray(idxC, datenum(Tfull.date_time), [], @(x) x(end));
+date_core = datetime(date_core_num, 'ConvertFrom','datenum');
+
+% --- Visit per core (last) using numeric codes + accumarray
+visitTypes = ["a","b","c","d"];
+lineStyles = ["-","--",":","-."];
+
+visit_code = zeros(height(Tfull),1);  % 0 = unknown
+for j = 1:numel(visitTypes)
+    visit_code(Tfull.Visit == visitTypes(j)) = j;
+end
+visit_code_core = accumarray(idxC, visit_code, [], @(x) x(end));  % numeric per core
+
+% Stations to plot (first 3 found). If you want fixed: stations_to_plot = [1 2 3];
+stations_unique = unique(station_core(isfinite(station_core)));
+stations_unique = stations_unique(:)';
+nPanels = min(3, numel(stations_unique));
+if nPanels == 0
+    error('No stations found after filtering. Check Station data.');
+end
+stations_to_plot = stations_unique(1:nPanels);
+
+% Plot
+figure
+tiledlayout(1,nPanels,"TileSpacing","compact","Padding","compact")
+
+for i = 1:nPanels
+    st = stations_to_plot(i);
+
+    nexttile
+    hold on; box on;
+
+    cores_here = core_list(station_core == st);
+    nCores = numel(cores_here);
+
+    % Colors from colormap (evenly spaced)
+    ic = round(linspace(1, size(cmap,1), max(nCores,1)));
+    colors = cmap(ic,:);
+
+    legendHandles = gobjects(0);
+    legendLabels  = strings(0);
+
+    for k = 1:nCores
+        c = cores_here(k);
+
+        ind = Tfull.Core_number_RHO == c;
+
+        z = Tfull.Depth(ind);
+        t = Tfull.temperature(ind);
+
+        ok = isfinite(z) & isfinite(t);
+        if ~any(ok), continue; end
+
+        % Sort by depth for nice profile
+        [zS, ii] = sort(z(ok));
+        tS = t(ok);
+        tS = tS(ii);
+
+        % Line style based on visit code
+        vcode = visit_code_core(core_list == c);
+        style = "-";
+        vtxt  = "unk";
+        if vcode >= 1 && vcode <= numel(lineStyles)
+            style = lineStyles(vcode);
+            vtxt  = visitTypes(vcode);
         end
+
+        h = plot(tS, zS, ...
+            'LineWidth', 1.5, ...
+            'Color', colors(k,:), ...
+            'LineStyle', style);
+
+        % Legend label includes date and visit
+        legendHandles(end+1) = h;
+        legendLabels(end+1)  = string(date_core(core_list==c), "MMM dd") + " (visit " + vtxt + ")";
+    end
+
+    set(gca,'YDir','reverse')
+    grid on
+    xlabel('Temperature')
+    ylabel('Depth (m)')
+    title("Station " + string(st))
+
+    if ~isempty(legendHandles)
+        legend(legendHandles, legendLabels, 'Location','best', 'Box','off')
     end
 end
 
-xlabel('Bottom Temperature')
-ylabel('Ice Thickness')
-title('Bottom Temperature vs Ice Thickness')
-grid on
+%% NetCDF import
+clear; clc; close all;
+% ncdisp(filename)
+filename = fullfile(pwd, 'Export', 'Contrasts_physical_properties_coring.nc');
 
-legend(legendHandles, ...
-       "Station " + string(stations_unique), ...
-       'Location','northoutside','numcolumns',3,'box','off')
+date_time_raw    = ncread(filename, '/RHO/DATE_TIME');
+temperature      = ncread(filename, '/RHO/Temperature_ice_snow');
+Core_number_RHO  = ncread(filename, '/RHO/Core_number_RHO');
+Station          = ncread(filename, '/RHO/Ice_station_number');
+Visit            = ncread(filename, '/RHO/Ice_station_visit'); string(Visit(:))
+Melt_pond        = ncread(filename, '/RHO/Melt_pond');
+IceThickness     = ncread(filename, '/RHO/Sea_ice_thickness');
+Depth            = ncread(filename, '/RHO/Depth_ice_snow_top_minimum');
+
+units   = ncreadatt(filename, '/RHO/DATE_TIME', 'units');
+refDate = datetime(extractAfter(units, 'since '), 'InputFormat','yyyy-MM-dd HH:mm:ss');
+date_time = refDate + days(date_time_raw);
+
+load("batlow.mat","batlow")
+cmap = batlow;
+Tfull = table(Core_number_RHO(:), Station(:), Visit(:), date_time(:), temperature(:), Depth(:), ...
+    'VariableNames', {'Core_number_RHO','Station','Visit','date_time','temperature','Depth'});
+
+% Remove invalid rows
+good = isfinite(Tfull.Core_number_RHO) & isfinite(Tfull.Station) & isfinite(Tfull.temperature) & isfinite(Tfull.Depth);
+Tfull = Tfull(good,:);
+
+% Sort so "last" corresponds to last date_time for each core (like your bottom-temp approach)
+Tfull = sortrows(Tfull, {'Core_number_RHO','date_time'});
+
+% Per-core indices
+[core_list, ~, idxC] = unique(Tfull.Core_number_RHO);
+
+% Station per core (last)
+station_core = accumarray(idxC, Tfull.Station, [], @(x) x(end));
+
+% Date per core (last)
+date_core_num = accumarray(idxC, datenum(Tfull.date_time), [], @(x) x(end));
+date_core = datetime(date_core_num, 'ConvertFrom','datenum');
+
+% Choose up to 3 stations to plot (edit if you want fixed [1 2 3])
+stations_unique = unique(station_core(isfinite(station_core)));
+stations_unique = stations_unique(:)';
+nPanels = min(3, numel(stations_unique));
+if nPanels == 0
+    error('No stations found after filtering. Check Station data.');
+end
+
+% Plot: 3 panels (by station), each core = one profile, legend = date, colors = lipari
+figure
+tiledlayout(1,3,"TileSpacing","compact","Padding","compact")
+
+for i = 1:3
+    st = stations_unique(i);
+
+    nexttile
+    hold on; box on;
+
+    cores_here = core_list(station_core == st);
+    nCores = numel(cores_here);
+
+    % Lipari colors for this station panel
+    idx = round(linspace(1, size(cmap,1), max(nCores,1)));
+    colors = cmap(idx,:);
+
+    legendHandles = gobjects(0);
+    legendLabels  = strings(0);
+
+    for k = 1:nCores
+        c = cores_here(k);
+
+        ind = Tfull.Core_number_RHO == c;
+
+        z = Tfull.Depth(ind);
+        t = Tfull.temperature(ind);
+
+        good = isfinite(z) & isfinite(t);
+        if ~any(good)
+            continue
+        end
+
+        % sort by depth so profile draws nicely
+        [zS, ii] = sort(z(good));
+        tS = t(good);
+        tS = tS(ii);
+
+        h = plot(tS, zS, '-', ...
+            'LineWidth', 1.5, ...
+            'Color', colors(k,:));
+
+        legendHandles(end+1) = h;
+        legendLabels(end+1)  = string(date_core(core_list==c), "MMM dd");
+    end
+
+    set(gca,'YDir','reverse')
+    grid on
+    xlabel('Temperature')
+    ylabel('Depth (m)')
+    title("Station " + string(st))
+
+    if ~isempty(legendHandles)
+        legend(legendHandles, legendLabels, 'Location','best', 'Box','off')
+    end
+end
+set(gcf,'Units','inches','Position',[2 5 7 4.5]); box on
 
 %% Functions
 function x = toNum(x)

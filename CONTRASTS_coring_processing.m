@@ -434,6 +434,7 @@ preferredRHO = [
     string(MAP.Vb_export)
     string(MAP.Vg_pr)
     string(MAP.Vg)
+    "SnowHeight"
     "Comments"
 ];
 T_all_proc.rho_out = keepAndOrder(rho, preferredRHO);
@@ -465,6 +466,7 @@ preferredT = [
     "MeltPond01"
     tDepth
     tTemp
+    "SnowHeight"
 ];
 T_all_proc.T_out = keepAndOrder(TT, preferredT);
 
@@ -498,6 +500,7 @@ if isfield(T_all_proc,'SALO18') && ~isempty(T_all_proc.SALO18)
         sD1
         sD2
         sSal
+        "SnowHeight"
     ];
     T_all_proc.SALO18_out = keepAndOrder(S, preferredS);
 else
@@ -510,6 +513,7 @@ renameMap = {
     "Time_best",           "DATE/TIME"
     "GPS_Lat",             "LATITUDE"
     "GPS_Lon",             "LONGITUDE"
+    "SnowHeight",          "Snow height"
 
     "CoreID_RHO",          "Core number (RHO)"
     "CoreID_T",            "Core number (T)"
@@ -575,6 +579,18 @@ end
 if isfield(T_all_proc,'SALO18_out') && ismember(salName, T_all_proc.SALO18_out.Properties.VariableNames) ...
         && isnumeric(T_all_proc.SALO18_out.(salName))
     T_all_proc.SALO18_out.(salName) = round(T_all_proc.SALO18_out.(salName), 2);
+end
+
+snowName = "Snow height";
+if ismember(snowName, T_all_proc.rho_out.Properties.VariableNames) && isnumeric(T_all_proc.rho_out.(snowName))
+    T_all_proc.rho_out.(snowName) = round(T_all_proc.rho_out.(snowName), 2);
+end
+if ismember(snowName, T_all_proc.T_out.Properties.VariableNames) && isnumeric(T_all_proc.T_out.(snowName))
+    T_all_proc.T_out.(snowName) = round(T_all_proc.T_out.(snowName), 2);
+end
+if isfield(T_all_proc,'SALO18_out') && ismember(snowName, T_all_proc.SALO18_out.Properties.VariableNames) ...
+        && isnumeric(T_all_proc.SALO18_out.(snowName))
+    T_all_proc.SALO18_out.(snowName) = round(T_all_proc.SALO18_out.(snowName), 2);
 end
 
 % ========================= 8) Save + Export =========================

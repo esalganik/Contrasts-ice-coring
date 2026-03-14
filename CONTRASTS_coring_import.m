@@ -90,6 +90,7 @@ T.Properties.VariableNames = {'Depth1','Depth2','Density_gcm3','Comments'};
         % Add metadata (FAST: read metadata-core once per file)
         newTbl = add_metadata_fast(T,filePath,{'A7','A8','A10','A2'},{'C7','C8','C10','C2'},extraMeta);
         mc = readMetaCoringOnce(filePath);
+        newTbl = add_metadata_coring_fields(newTbl, mc);
 
         % GPS from folder (unchanged)
         [newTbl.GPS_Lat,newTbl.GPS_Lon,newTbl.GPS_Time] = getFirstGPS(filePath,height(newTbl));
@@ -134,6 +135,7 @@ end
         newTbl = add_metadata_fast(T,filePath,{'A7','A8','A10'},{'C7','C8','C10'},extraMeta);
         [newTbl.GPS_Lat,newTbl.GPS_Lon,newTbl.GPS_Time] = getFirstGPS(filePath,height(newTbl));
         mc = readMetaCoringOnce(filePath);
+        newTbl = add_metadata_coring_fields(newTbl, mc);
         newTbl = fillGPSTimeFromMetaCoreDate(newTbl, mc.tod);
 
         if ismember("GPS_Time", newTbl.Properties.VariableNames) && isdatetime(newTbl.GPS_Time)
@@ -189,6 +191,7 @@ elseif contains(filePath,'-SALO18.xlsx')
         [newTbl.GPS_Lat,newTbl.GPS_Lon,newTbl.GPS_Time] = getFirstGPS(filePath,height(newTbl));
         newTbl = fillGPSTimeFromMetaCoreDate(newTbl, filePath);
         mc = readMetaCoringOnce(filePath);
+        newTbl = add_metadata_coring_fields(newTbl, mc);
 newTbl = fillGPSTimeFromMetaCoreDate(newTbl, mc.tod);
 
         if ismember("GPS_Time", newTbl.Properties.VariableNames) && isdatetime(newTbl.GPS_Time)
@@ -383,24 +386,27 @@ end
 end
 
 function mc = readMetaCoringOnce(filePath)
-% Read metadata-coring block once (C8:C13)
-% mc.lat, mc.lon, mc.date, mc.tod (duration), mc.hasAny
-    mc = struct('lat',NaN,'lon',NaN,'date',NaT,'tod',hours(9),'hasAny',false);
+% Read metadata-coring block once (C8:C16)
+% mc.lat, mc.lon, mc.date, mc.tod (duration), mc.snowHeight, mc.hasAny
+    mc = struct('lat',NaN,'lon',NaN,'date',NaT,'tod',hours(9), ...
+                'snowHeight',NaN,'hasAny',false);
 
     try
-        block = readcell(filePath,'Sheet','metadata-coring','Range','C8:C13','UseExcel',false);
+        block = readcell(filePath,'Sheet','metadata-coring','Range','C8:C16','UseExcel',false);
     catch
         return
     end
 
-    % C8 lat, C9 lon, C12 date, C13 time
-    lat0 = str2double(strrep(strtrim(string(block{1})),",","."));
-    lon0 = str2double(strrep(strtrim(string(block{2})),",","."));
-    dRaw = block{5};
-    tRaw = block{6};
+    % C8 lat, C9 lon, C12 date, C13 time, C16 snow height
+    lat0  = str2double(strrep(strtrim(string(block{1})),",","."));
+    lon0  = str2double(strrep(strtrim(string(block{2})),",","."));
+    dRaw  = block{5};
+    tRaw  = block{6};
+    snow0 = str2double(strrep(strtrim(string(block{9})),",","."));
 
-    if ~isnan(lat0), mc.lat = lat0; end
-    if ~isnan(lon0), mc.lon = lon0; end
+    if ~isnan(lat0),  mc.lat = lat0; end
+    if ~isnan(lon0),  mc.lon = lon0; end
+    if ~isnan(snow0), mc.snowHeight = snow0; end
 
     % date
     if isdatetime(dRaw)
@@ -433,4 +439,9 @@ function mc = readMetaCoringOnce(filePath)
     end
 
     mc.hasAny = (~isnan(mc.lat) || ~isnan(mc.lon) || ~isnat(mc.date));
+end
+
+function tbl = add_metadata_coring_fields(tbl, mc)
+if isempty(tbl), return; end
+tbl.SnowHeight = repmat(mc.snowHeight, height(tbl), 1);
 end
