@@ -1,5 +1,5 @@
 Dmitry Divine, 	Evgenii Salganik, David Clemens-Sewall, Emiliano Cimoli, Lena Eggers, Keigo Takahashi, and Marcel Nicolaus (2026)
-First- and second-year sea-ice salinity, temperature, and density from the coring sites during the CONTRASTS expedition in July-August 2025
+Processing script for first- and second-year sea-ice salinity, temperature, and density from the coring sites during the CONTRASTS expedition in July-August 2025
 
 Sea-ice salinity, temperature, density, thickness, and draft were measured during surveys at coring sites of the CONTRASTS expedition, with four sampling events conducted at each of three different stations. Ice cores were extracted using a 9-cm (Mark II) internal-diameter ice corer (Kovacs Enterprise, USA). This dataset includes data from 11 coring site visits conducted between 10 July and 26 August 2025, with 14 density, 13 salinity, and 14 temperature cores. The sampling was conducted in the Arctic Ocean between 82.2–85.0°N and 17.9°E to 34.0°W.
 
@@ -10,6 +10,9 @@ The density dataset contains the event label (1), date/time (2), geographic coor
 The temperature dataset contains the event label (1), date/time (2), geographic coordinates (3–4), core number (8), station number (9), station visit (10), ice age (11), the presence of a melt pond above the ice core (12), and snow or surface scattering layer height (15) for each coring event. For each temperature core, the following data are provided: manually measured ice thickness (5), ice draft (6), and core length (7). For each core section, the depths (13) measured in situ are included. Each core section includes in situ temperature (14). Ice temperatures were constrained to a maximum of –0.1 °C.
 
 The salinity dataset contains the event label (1), date/time (2), geographic coordinates (3–4), core number (8), station number (9), station visit (10), ice age (11), the presence of a melt pond above the ice core (12), and snow or surface scattering layer height (16) for each coring event. For each salinity core, the following data are provided: manually measured ice thickness (5), ice draft (6), and core length (7). For each core section, the top (13) and bottom (14) depths measured in situ are included. Each core section includes practical salinity (15).
+
+Raw data files and data processing scripts are available in Salganik et al. (2026) [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19018446.svg)](https://doi.org/10.5281/zenodo.19018446) 
+
 
 <figure>
   <img src="https://github.com/esalganik/Contrasts-ice-coring/blob/main/Density_salinity_temperature_vs_time.png" width="600">
