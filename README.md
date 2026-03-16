@@ -14,7 +14,8 @@ The salinity dataset contains the event label (1), date/time (2), geographic coo
 Raw data files and data processing scripts are available in Salganik et al. (2026) [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19018446.svg)](https://doi.org/10.5281/zenodo.19018446) 
 
 Acknowledgements
-DD participation in the CONTRASTs cruise was supported through internal funding of the Norwegian Polar Institute.
+
+DD's participation in the CONTRASTs cruise was supported by internal funding from the Norwegian Polar Institute.
 ES was supported through the European Union’s Horizon 2020 research and innovation programme under grant agreement No. 101003472 - Arctic PASSION.
 DCS was supported by the National Science Foundation’s Arctic System Science program, award OPP-2138787.
 
