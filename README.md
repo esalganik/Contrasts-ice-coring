@@ -19,7 +19,7 @@ The data collection is part of the expedition of the Research Vessel Polarstern 
 DD's participation in the CONTRASTs cruise was supported by internal funding from the Norwegian Polar Institute.
 ES was supported through the European Union’s Horizon 2020 research and innovation programme under grant agreement No. 101003472 - Arctic PASSION.
 DCS was supported by the National Science Foundation’s Arctic System Science program, award OPP-2138787.
-KT was supported by the Japan Society for the Promotion of Science under grant agreement No. 24KJ0006 - Roles of algal aggregates on the biological pump in sea ice-covered oceans.
+EC and KT were supported by the Japan Society for the Promotion of Science under grant agreement No. 24KJ0006 - Roles of algal aggregates on the biological pump in sea ice-covered oceans.
 
 <figure>
   <img src="https://github.com/esalganik/Contrasts-ice-coring/blob/main/Density_salinity_temperature_vs_time.png" width="600">
