@@ -15,7 +15,7 @@ Raw data files and data processing scripts are available in Salganik et al. (202
 
 Acknowledgements
 
-The data collection is part of the expedition of the Research Vessel Polarstern during the expedition CONTRASTS (PS149, grant: AWI_PS149_00).
+The data collection is part of the expedition of the Research Vessel Polarstern (Knust, 2017, doi:10.17815/jlsrf-3-163) during the expedition CONTRASTS (PS149, grant: AWI_PS149_00).
 DD's participation in the CONTRASTs cruise was supported by internal funding from the Norwegian Polar Institute.
 ES was supported through the European Union’s Horizon 2020 research and innovation programme under grant agreement No. 101003472 - Arctic PASSION.
 DCS was supported by the National Science Foundation’s Arctic System Science program, award OPP-2138787.
