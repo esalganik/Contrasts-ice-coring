@@ -134,7 +134,7 @@ stations = stations(~isnan(stations));
 stations = stations(ismember(stations,[1 2 3]));
 stations = sort(stations);
 
-cols = lines(3);
+cols = [1 61 115; 58 174 140; 245 174 16] / 255; % CONTRASTS station colors from Okabe-Ito palette
 
 figure('Color','w');
 tiledlayout(3,1,'Padding','compact','TileSpacing','compact');
