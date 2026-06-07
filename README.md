@@ -1,5 +1,7 @@
 # CONTRASTS Sea-Ice Coring Processing Workflow
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19018446.svg)](https://doi.org/10.5281/zenodo.19018446)
+
 **Dmitry Divine, Evgenii Salganik, David Clemens-Sewall, Emiliano Cimoli, Sarah Lena Eggers, Keigo Takahashi, and Marcel Nicolaus (2026)**
 
 MATLAB workflow for processing first- and second-year sea-ice salinity, temperature, and density observations collected at coring sites during the CONTRASTS expedition (PS149) in July–August 2025.
@@ -48,7 +50,7 @@ PANGAEA. https://doi.pangaea.de/10.1594/PANGAEA.993687
 
 ## Original workflow publication
 
-The original version of the processing workflow is archived on Zenodo:
+A citable archive of the processing workflow is available on Zenodo:
 
 Salganik, E.; Divine, D. V.; Clemens-Sewall, D.; Cimoli, E.; Eggers, S. L.; Takahashi, K.; Nicolaus, M. (2026):
 
@@ -64,8 +66,14 @@ https://doi.org/10.5281/zenodo.19018446
 data/
 ├── raw/                    # Original field and laboratory spreadsheets
 ├── processed/              # Imported MATLAB structures
-└── final/                  # Final processed products
-    └── netcdf/             # NetCDF exports
+│   └── core_data_imported.mat
+└── final/
+    ├── core_data_processed.mat
+    ├── core_data_final.xlsx
+    └── netcdf/
+        ├── Contrasts_coring_density.nc
+        ├── Contrasts_coring_temperature.nc
+        └── Contrasts_coring_salinity.nc
 
 scripts/
 ├── a_CONTRASTS_coring_import.m
@@ -73,16 +81,33 @@ scripts/
 ├── c_CONTRASTS_coring_netcdf.m
 └── d_Figure_coring_overview.m
 
+analysis/
+└── e_bottom_n_sections_latent_density_thickness_vs_time.m
+
 figures/
+├── coring_CONTRASTS_overview.png
 ```
 
 ---
+
+## Quick start
+
+From the repository root, run:
+
+```matlab
+a_CONTRASTS_coring_import
+b_CONTRASTS_coring_processing
+c_CONTRASTS_coring_netcdf
+d_Figure_coring_overview
+```
+
+This reproduces the processed MATLAB, Excel, and NetCDF products and generates the overview figure.
 
 ## Workflow
 
 ### 1. Import
 
-`import_all_cores_only.m`
+`a_CONTRASTS_coring_import.m`
 
 * Reads raw Excel files from `data/raw`
 * Imports density, temperature, and salinity measurements
@@ -96,7 +121,7 @@ data/processed/core_data_imported.mat
 
 ### 2. Processing
 
-`process_all_cores_only.m`
+`b_CONTRASTS_coring_processing.m`
 
 * Matches temperature and density measurements
 * Interpolates temperature profiles to density-core depths
@@ -112,7 +137,7 @@ data/final/core_data_final.xlsx
 
 ### 3. NetCDF export
 
-`export_netcdf.m`
+`c_CONTRASTS_coring_netcdf.m`
 
 * Converts processed tables to CF-compliant NetCDF files
 * Adds variable metadata and global attributes
@@ -126,6 +151,22 @@ data/final/netcdf/
 ```
 
 ---
+
+### 4. Overview figure
+
+`d_Figure_coring_overview.m`
+
+* Imports processed coring products
+* Calculates core-averaged salinity, density, temperature, and thickness
+* Creates:
+
+```text
+figures/coring_CONTRASTS_overview.png
+```
+
+## Additional analyses
+
+The `analysis/` directory contains optional scientific analysis scripts that use the processed datasets and NetCDF exports. These scripts are not required to reproduce the published datasets and are intended for downstream analyses and figure generation.
 
 ## Requirements
 
