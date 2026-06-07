@@ -1,13 +1,15 @@
+% e_bottom_n_sections_latent_density_thickness_vs_time.m
 % Analysis script.
 % Not part of the published data-processing workflow.
 % Uses exported density NetCDF products to estimate
 % effective latent heat of the lowermost sea-ice layers.
-
-% e_bottom_n_sections_latent_density_thickness_vs_time.m
+%
 % Uses the deepest n sections of each density core.
 %
 % Plot:
 %   (1) effective latent heat of the lowermost ice vs time
+%       - filled markers: latent-only estimate
+%       - open markers: enthalpy-style estimate
 %   (2) mean in situ density of the lowermost ice vs time
 %   (3) total ice thickness vs time
 %
@@ -17,7 +19,7 @@ clear; close all; clc
 
 projectRoot = pwd;
 
-nBottomSections = 3;   % 1 = bottom 5 cm, 2 = bottom 10 cm
+nBottomSections = 3;   % CHANGE THIS: 1 = bottom 5 cm, 2 = bottom 10 cm, etc.
 
 ncFile = fullfile(projectRoot, "data", "final", "netcdf", ...
     "Contrasts_coring_density.nc");
@@ -104,7 +106,7 @@ for i = 1:nCores
 
 end
 
-% Remove empty rows, if any
+% Remove empty rows
 valid = ~isnat(CoreTime) & ~isnan(CoreID);
 
 CoreTime      = CoreTime(valid);
@@ -131,21 +133,55 @@ CoreDensity   = CoreDensity(I);
 CoreTemp      = CoreTemp(I);
 CoreNSections = CoreNSections(I);
 
-% ========================= Simple effective latent heat =========================
+% ========================= Effective latent heat estimates =========================
 
 Lf = 333.4e3;                        % J kg^-1
-rhoIce = 916.8 - 0.1403 .* CoreTemp; % kg m^-3
+
+T = CoreTemp;                        % deg C
+
+% Temperature-dependent properties
+rhoIce = 916.8 - 0.1403 .* T;        % kg m^-3, Pounder (1965)
+
+ci = 2112.2 + 7.6973 .* T;           % J kg^-1 K^-1, Weast (1971)
+
+Sb = -18.7 .* T ...
+     - 0.519 .* T.^2 ...
+     - 0.00535 .* T.^3;             % brine salinity, Vancoppenolle et al.
+
+cb = 4208.8 ...
+     + 111.71 .* T ...
+     + 3.5611 .* T.^2 ...
+     + 0.052168 .* T.^3;            % J kg^-1 K^-1, Fofonoff and Millard Jr. (1983)
+
+rhoBrine = 1000.3 ...
+         + 0.78237 .* Sb ...
+         + 2.8008e-4 .* Sb.^2;      % kg m^-3, Schwerdtfeger (1963)
 
 SolidFraction = 1 - CoreBrine - CoreGas;
 SolidFraction(SolidFraction < 0 | SolidFraction > 1) = NaN;
 
-EffectiveLatentHeat_Jm3 = rhoIce .* SolidFraction .* Lf;
-EffectiveLatentHeat_MJm3 = EffectiveLatentHeat_Jm3 / 1e6;
+% Method 1: latent heat only, based on solid ice volume fraction
+EffectiveLatentHeat_simple_Jm3 = rhoIce .* SolidFraction .* Lf;
+EffectiveLatentHeat_simple_MJm3 = EffectiveLatentHeat_simple_Jm3 / 1e6;
+
+% Method 2: enthalpy-style estimate including sensible heat of ice and brine
+EffectiveLatentHeat_enthalpy_Jm3 = ...
+      rhoIce .* SolidFraction .* Lf ...
+    + rhoIce .* SolidFraction .* ci .* abs(T) ...
+    + rhoBrine .* CoreBrine .* cb .* abs(T);
+
+EffectiveLatentHeat_enthalpy_MJm3 = EffectiveLatentHeat_enthalpy_Jm3 / 1e6;
+
+EnthalpyCorrection_MJm3 = ...
+    EffectiveLatentHeat_enthalpy_MJm3 - EffectiveLatentHeat_simple_MJm3;
 
 BottomNTable = table( ...
     CoreTime, CoreID, CoreStation, CoreNSections, CoreDepthMean, ...
     CoreThickness, CoreBrine, CoreGas, SolidFraction, ...
-    CoreDensity, CoreTemp, EffectiveLatentHeat_Jm3);
+    CoreDensity, CoreTemp, Sb, rhoIce, rhoBrine, ci, cb, ...
+    EffectiveLatentHeat_simple_Jm3, ...
+    EffectiveLatentHeat_enthalpy_Jm3, ...
+    EnthalpyCorrection_MJm3);
 
 % disp(BottomNTable)
 
@@ -154,11 +190,17 @@ BottomNTable = table( ...
 % writetable(BottomNTable, outTable);
 % fprintf("Saved table to %s\n", outTable);
 
-fprintf("Mean effective latent heat = %.1f MJ m^-3\n", ...
-    mean(EffectiveLatentHeat_MJm3, "omitnan"));
-fprintf("Std effective latent heat  = %.1f MJ m^-3\n", ...
-    std(EffectiveLatentHeat_MJm3, "omitnan"));
-fprintf("Mean bottom density        = %.1f kg m^-3\n", ...
+fprintf("Mean simple effective latent heat   = %.1f MJ m^-3\n", ...
+    mean(EffectiveLatentHeat_simple_MJm3, "omitnan"));
+fprintf("Std simple effective latent heat    = %.1f MJ m^-3\n", ...
+    std(EffectiveLatentHeat_simple_MJm3, "omitnan"));
+fprintf("Mean enthalpy effective latent heat = %.1f MJ m^-3\n", ...
+    mean(EffectiveLatentHeat_enthalpy_MJm3, "omitnan"));
+fprintf("Std enthalpy effective latent heat  = %.1f MJ m^-3\n", ...
+    std(EffectiveLatentHeat_enthalpy_MJm3, "omitnan"));
+fprintf("Mean enthalpy correction            = %.1f MJ m^-3\n", ...
+    mean(EnthalpyCorrection_MJm3, "omitnan"));
+fprintf("Mean bottom density                 = %.1f kg m^-3\n", ...
     mean(CoreDensity, "omitnan"));
 
 % ========================= Plot =========================
@@ -167,17 +209,23 @@ figure("Color","w");
 tiledlayout(3,1,"Padding","compact","TileSpacing","compact");
 
 ax1 = nexttile; hold on; grid on; box on
-plotByStation(CoreTime, EffectiveLatentHeat_MJm3, CoreStation, cols)
+
+% Filled markers: simple latent-only estimate
+plotByStation(CoreTime, EffectiveLatentHeat_simple_MJm3, CoreStation, cols, true)
+
+% Open markers: enthalpy-style estimate
+plotByStation(CoreTime, EffectiveLatentHeat_enthalpy_MJm3, CoreStation, cols, false)
+
 ylabel("Effective latent heat (MJ m^{-3})")
 title(sprintf("(a) Lowermost %d section(s): effective latent heat", nBottomSections))
 
 ax2 = nexttile; hold on; grid on; box on
-plotByStation(CoreTime, CoreDensity, CoreStation, cols)
+plotByStation(CoreTime, CoreDensity, CoreStation, cols, true)
 ylabel("In situ density (kg m^{-3})")
 title(sprintf("(b) Lowermost %d section(s): mean sea-ice density", nBottomSections))
 
 ax3 = nexttile; hold on; grid on; box on
-plotByStation(CoreTime, CoreThickness, CoreStation, cols)
+plotByStation(CoreTime, CoreThickness, CoreStation, cols, true)
 ylabel("Ice thickness (m)")
 title("(c) Core-site ice thickness")
 xlabel("Date")
@@ -193,7 +241,8 @@ xtickformat(ax1, "dd MMM")
 xtickformat(ax2, "dd MMM")
 xtickformat(ax3, "dd MMM")
 
-h = gobjects(3,1);
+h = gobjects(5,1);
+
 for st = 1:3
     h(st) = plot(ax1, NaN, NaN, "o", ...
         "MarkerSize", 8, ...
@@ -202,13 +251,28 @@ for st = 1:3
         "LineStyle", "none");
 end
 
-lgd = legend(h, ["Station 1","Station 2","Station 3"], ...
+h(4) = plot(ax1, NaN, NaN, "o", ...
+    "MarkerSize", 8, ...
+    "MarkerFaceColor", "k", ...
+    "MarkerEdgeColor", "k", ...
+    "LineStyle", "none");
+
+h(5) = plot(ax1, NaN, NaN, "o", ...
+    "MarkerSize", 8, ...
+    "MarkerFaceColor", "none", ...
+    "MarkerEdgeColor", "k", ...
+    "LineWidth", 1.4, ...
+    "LineStyle", "none");
+
+lgd = legend(h, ...
+    ["Station 1","Station 2","Station 3", ...
+     "Latent only","Enthalpy"], ...
     "Location","northoutside", ...
-    "NumColumns",3);
+    "NumColumns",5);
 lgd.Layout.Tile = "north";
 
 set([ax1 ax2 ax3], "FontSize", 10)
-set(gcf, "Units", "inches", "Position", [4 4 9 8])
+set(gcf, "Units", "inches", "Position", [4 4 10 8])
 
 outFig = fullfile(figFolder, ...
     sprintf("bottom_%d_sections_latent_density_thickness_vs_time.png", nBottomSections));
@@ -231,12 +295,19 @@ function mu = weightedMean(x, w)
     end
 end
 
-function plotByStation(x, y, st, cols)
+function plotByStation(x, y, st, cols, filledMarkers)
     for s = 1:3
         idx = st == s & ~isnan(y);
 
-        scatter(x(idx), y(idx), 70, "o", ...
-            "MarkerFaceColor", cols(s,:), ...
-            "MarkerEdgeColor", cols(s,:));
+        if filledMarkers
+            scatter(x(idx), y(idx), 70, "o", ...
+                "MarkerFaceColor", cols(s,:), ...
+                "MarkerEdgeColor", cols(s,:));
+        else
+            scatter(x(idx), y(idx), 70, "o", ...
+                "MarkerFaceColor", "none", ...
+                "MarkerEdgeColor", cols(s,:), ...
+                "LineWidth", 1.4);
+        end
     end
 end
