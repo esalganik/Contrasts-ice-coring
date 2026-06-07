@@ -68,9 +68,10 @@ data/
     └── netcdf/             # NetCDF exports
 
 scripts/
-├── import_all_cores_only.m
-├── process_all_cores_only.m
-└── export_netcdf.m
+├── a_CONTRASTS_coring_import.m
+├── b_CONTRASTS_coring_processing.m
+├── c_CONTRASTS_coring_netcdf.m
+└── d_Figure_coring_overview.m
 
 figures/
 ```
