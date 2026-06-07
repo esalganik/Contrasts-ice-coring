@@ -150,24 +150,10 @@ If you use this repository, please cite:
 
 ---
 
-## Acknowledgements
-
-The data collection is part of the expedition of the Research Vessel *Polarstern* (Knust, 2017, doi:10.17815/jlsrf-3-163) during the CONTRASTS expedition (PS149, grant: AWI_PS149_00).
-
-DD's participation in the CONTRASTS cruise was supported by internal funding from the Norwegian Polar Institute.
-
-ES was supported through the European Union's Horizon 2020 research and innovation programme under grant agreement No. 101003472 – Arctic PASSION.
-
-DCS was supported by the National Science Foundation Arctic System Science program, award OPP-2138787.
-
-EC and KT were supported by the Japan Society for the Promotion of Science under grant agreement No. 24KJ0006 – Roles of algal aggregates on the biological pump in sea ice-covered oceans.
-
----
-
 ## Figure
 
 <p align="center">
-  <img src="Density_salinity_temperature_vs_time.png" width="700">
+  <img src="figures/coring_CONTRASTS_overview.png" width="900">
 </p>
 
-**Figure 1.** Temporal evolution of sea-ice salinity, density, and temperature at the CONTRASTS coring stations during July–August 2025.
+**Figure 1.** Temporal evolution of sea-ice salinity, in situ density, temperature, and ice thickness at the CONTRASTS coring stations during July-August 2025.
