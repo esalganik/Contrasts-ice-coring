@@ -48,7 +48,7 @@ PANGAEA. https://doi.pangaea.de/10.1594/PANGAEA.993687
 
 ---
 
-## Zenodo archive
+## Software publication
 
 A citable archive of the processing workflow is available on Zenodo:
 
@@ -181,7 +181,7 @@ The `analysis/` directory contains optional scientific analysis scripts that use
 If you use this repository, please cite:
 
 1. The processing workflow publication:
-   https://doi.org/10.5281/zenodo.19018446
+   https://doi.org/10.5281/zenodo.20589684
 
 2. The relevant PANGAEA dataset(s):
 
