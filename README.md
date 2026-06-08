@@ -1,6 +1,6 @@
 # CONTRASTS Sea-Ice Coring Processing Workflow
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19018446.svg)](https://doi.org/10.5281/zenodo.19018446)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20589684.svg)](https://doi.org/10.5281/zenodo.20589684)
 
 **Dmitry Divine, Evgenii Salganik, David Clemens-Sewall, Emiliano Cimoli, Sarah Lena Eggers, Keigo Takahashi, and Marcel Nicolaus (2026)**
 
@@ -48,7 +48,7 @@ PANGAEA. https://doi.pangaea.de/10.1594/PANGAEA.993687
 
 ---
 
-## Original workflow publication
+## Zenodo archive
 
 A citable archive of the processing workflow is available on Zenodo:
 
@@ -56,7 +56,7 @@ Salganik, E.; Divine, D. V.; Clemens-Sewall, D.; Cimoli, E.; Eggers, S. L.; Taka
 
 *Processing script for first- and second-year sea-ice salinity, temperature, and density from the coring sites during the CONTRASTS expedition in July-August 2025.*
 
-https://doi.org/10.5281/zenodo.19018446
+https://doi.org/10.5281/zenodo.20589684
 
 ---
 
