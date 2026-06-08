@@ -1,0 +1,29 @@
+{
+  "title": "CONTRASTS Sea-Ice Coring Processing Workflow",
+  "upload_type": "software",
+  "description": "MATLAB workflow for processing first- and second-year sea-ice salinity, temperature, and density observations collected at coring sites during the CONTRASTS expedition (PS149) in July-August 2025.",
+  "creators": [
+    { "name": "Salganik, Evgenii" },
+    { "name": "Divine, Dmitry V." },
+    { "name": "Clemens-Sewall, David" },
+    { "name": "Cimoli, Emiliano" },
+    { "name": "Eggers, Sarah Lena" },
+    { "name": "Takahashi, Keigo" },
+    { "name": "Nicolaus, Marcel" }
+  ],
+  "grants": [
+    {
+      "id": "10.13039/501100000780::101003472"
+    }
+  ],
+  "keywords": [
+    "sea ice",
+    "CONTRASTS",
+    "PS149",
+    "salinity",
+    "temperature",
+    "density",
+    "MATLAB",
+    "Arctic"
+  ]
+}
